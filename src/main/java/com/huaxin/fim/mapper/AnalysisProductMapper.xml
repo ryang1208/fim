@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisProductMapper">
+
+	<select id="getLossDate" parameterType="map" resultType="java.util.HashMap">
+		select product_id, mindate
+			from (
+			select X.product_id,
+			least(perioddate_nv,perioddate_nv,periodvarietydate_trans,perioddate_trans,contactdate_trans,periodvarietydate_position,perioddate_position,contactdate_position,periodvarietydate_variety) mindate
+			from (
+			select product.id product_id,
+			(case when ((netvaluelist.nvdate is not null and periodlist.perioddate is not null) and (netvaluelist.nvdate &gt; periodlist.perioddate )) then periodlist.perioddate 
+				when ((netvaluelist.nvdate is not null and periodlist.perioddate is not null) and (netvaluelist.nvdate &lt;= periodlist.perioddate ) or netvaluelist.nvdate is null) then '99999999'
+				else if(product.create_date='','20000101',product.create_date) end )perioddate_nv,
+			(case when ((ifund_list.ifunddate is not null and periodlist.perioddate is not null) and (ifund_list.ifunddate &gt; periodlist.perioddate )) then periodlist.perioddate 
+				when ((ifund_list.ifunddate is not null and periodlist.perioddate is not null) and (ifund_list.ifunddate &lt;= periodlist.perioddate ) or ifund_list.ifunddate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )perioddate_fund,
+			(case when ((trans_summary_list.transdate is not null and period_variety_list.vardate is not null) and (trans_summary_list.transdate &gt; period_variety_list.vardate)) then period_variety_list.vardate 
+				when ((trans_summary_list.transdate is not null and period_variety_list.vardate is not null) and (trans_summary_list.transdate &lt;= period_variety_list.vardate) or trans_summary_list.transdate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )periodvarietydate_trans,
+			(case when ((trans_summary_list.transdate is not null and periodlist.perioddate is not null) and (trans_summary_list.transdate &gt; periodlist.perioddate)) then periodlist.perioddate 
+				when ((trans_summary_list.transdate is not null and periodlist.perioddate is not null) and (trans_summary_list.transdate &lt;= periodlist.perioddate) or trans_summary_list.transdate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )perioddate_trans,
+			(case when ((trans_summary_list.transdate is not null and contactlist.contactdate is not null) and (trans_summary_list.transdate &gt; contactlist.contactdate)) then contactlist.contactdate 
+				when ((trans_summary_list.transdate is not null and contactlist.contactdate is not null) and (trans_summary_list.transdate &lt;= contactlist.contactdate) or trans_summary_list.transdate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )contactdate_trans,
+			(case when ((pos_summary_list.posdate is not null and period_variety_list.vardate is not null) and (pos_summary_list.posdate &gt; period_variety_list.vardate)) then period_variety_list.vardate 
+				when ((pos_summary_list.posdate is not null and period_variety_list.vardate is not null) and (pos_summary_list.posdate &lt;= period_variety_list.vardate) or pos_summary_list.posdate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )periodvarietydate_position,
+			(case when ((pos_summary_list.posdate is not null and periodlist.perioddate is not null) and (pos_summary_list.posdate &gt; periodlist.perioddate)) then periodlist.perioddate 
+				when ((pos_summary_list.posdate is not null and periodlist.perioddate is not null) and (pos_summary_list.posdate &lt;= periodlist.perioddate) or pos_summary_list.posdate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )perioddate_position,
+			(case when ((pos_summary_list.posdate is not null and contactlist.contactdate is not null) and (pos_summary_list.posdate &gt; contactlist.contactdate)) then contactlist.contactdate 
+				when ((pos_summary_list.posdate is not null and contactlist.contactdate is not null) and (pos_summary_list.posdate &lt;= contactlist.contactdate) or pos_summary_list.posdate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )contactdate_position,
+			(case when ((var_summary_list.varsummarydate is not null and period_variety_list.vardate is not null) and (var_summary_list.varsummarydate &gt; period_variety_list.vardate)) then period_variety_list.vardate 
+				when ((var_summary_list.varsummarydate is not null and period_variety_list.vardate is not null) and (var_summary_list.varsummarydate &lt;= period_variety_list.vardate) or var_summary_list.varsummarydate is null) then '99999999' 
+				else if(product.create_date='','20000101',product.create_date) end )periodvarietydate_variety,
+			netvaluelist.nvdate,ifund_list.ifunddate,trans_summary_list.transdate,pos_summary_list.posdate,var_summary_list.varsummarydate,periodlist.perioddate,period_variety_list.vardate,contactlist.contactdate
+			from t_product product
+			left join (select netvaluelist.product_id,max(netvaluelist.date) nvdate 
+				from t_product_net_value netvaluelist 
+				where netvaluelist.date &lt; #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by netvaluelist.product_id) netvaluelist on product.id = netvaluelist.product_id
+			left join (	select rl.product_id,max(ifund_list.date) ifunddate
+				from t_invester_fund ifund_list 
+				left join t_product_invester_relationship rl on ifund_list.invester_id = rl.invester_id and ifund_list.broker_id = rl.broker_id and rl.invester_type = '1'
+				where ifund_list.date &lt; #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by rl.product_id)ifund_list on product.id = ifund_list.product_id
+			left join (select rl.product_id,max(trans_summary_list.date) transdate
+				from t_transaction_summary trans_summary_list 
+				left join t_product_invester_relationship rl on trans_summary_list.invester_id = rl.invester_id and trans_summary_list.broker_id = rl.broker_id and rl.invester_type = '1'
+				where trans_summary_list.date &lt; #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by rl.product_id)trans_summary_list on product.id = trans_summary_list.product_id
+			left join (select rl.product_id,max(pos_summary_list.date) posdate
+				from t_position_summary pos_summary_list 
+				left join t_product_invester_relationship rl on pos_summary_list.invester_id = rl.invester_id and pos_summary_list.broker_id = rl.broker_id and rl.invester_type = '1'
+				where pos_summary_list.date &lt; #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by rl.product_id)pos_summary_list on product.id = pos_summary_list.product_id
+			left join (select rl.product_id,max(var_summary_list.date) varsummarydate
+				from t_variety_summary var_summary_list 
+				left join t_product_invester_relationship rl on var_summary_list.invester_id = rl.invester_id and var_summary_list.broker_id = rl.broker_id and rl.invester_type = '1'
+				where var_summary_list.date &lt; #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by rl.product_id)var_summary_list on product.id = var_summary_list.product_id
+			left join (select periodlist.product_id,max(periodlist.date) perioddate
+				from t_product_period_kpi_statistics periodlist 
+				where periodlist.date &lt;= #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by periodlist.product_id)periodlist on product.id = periodlist.product_id
+			left join (select period_variety_list.product_id,max(period_variety_list.date) vardate
+				from t_product_period_variety_kpi_statistics period_variety_list 
+				where period_variety_list.date &lt;= #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by period_variety_list.product_id)period_variety_list on product.id = period_variety_list.product_id
+			left join (select contactlist.product_id,max(contactlist.date) contactdate
+				from t_product_contact_trade_daily_statistics contactlist 
+				where contactlist.date &lt;= #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+				group  by contactlist.product_id)contactlist on product.id = contactlist.product_id
+			)X
+		)result
+			where result.mindate not in ('99999999')
+	</select>
+
+	<select id="getCreateDate" parameterType="map" resultType="String">
+		select min(create_date) create_date from t_product
+		<if test="analysisProductPeriod != null">
+			where create_date &lt;&gt; '' and create_date is not null
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</select>
+
+    <select id="getMinNetvalueDate" parameterType="map" resultType="String">
+		select min(date) date from t_product_net_value
+		<if test="analysisProductPeriod != null">
+			where date &lt;&gt; '' and date is not null
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</select>
+	
+	<select id="getMinSettlementDate" parameterType="map" resultType="String">
+		select min(date) date 
+		from t_invester_fund base
+		left join t_product_invester_relationship rel on base.invester_id = rel.invester_id and base.broker_id = rel.broker_id and rel.invester_type = '1'
+		where date &lt;&gt; '' and date is not null 
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+	<delete id="deleteProrductPeriodDateAndProductIDAndKPI" parameterType="map">
+		delete from t_product_period_kpi_statistics 
+		where date between #{analysisProductPeriod.startDate ,jdbcType=VARCHAR} and #{analysisProductPeriod.endDate ,jdbcType=VARCHAR}
+	<if test="analysisProductPeriod != null">
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			and product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		<if test="analysisProductPeriod.kpiType != 0">
+			AND KPI IN 
+				  (SELECT 
+				    a.KPI 
+				  FROM
+				    t_kpi_dictionary a 
+				  WHERE a.type = #{analysisProductPeriod.kpiType,jdbcType=VARCHAR})
+		</if>
+		<if test="analysisProductPeriod.kpiCodes != null ">
+			and kpi in
+			<foreach item="kpiCode" index="index" collection="analysisProductPeriod.kpiCodes" open="(" separator="," close=")">  
+	            #{kpiCode}  
+	  		</foreach>
+		</if>
+	</if>
+	</delete>
+	
+	<delete id="deleteProrductRatingPeriodDateAndProductIDAndKPI" parameterType="map">
+		delete from t_product_rating_kpi_statistics 
+		where date between #{analysisProductPeriod.startDate ,jdbcType=VARCHAR} and #{analysisProductPeriod.endDate ,jdbcType=VARCHAR}
+	<if test="analysisProductPeriod != null">
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			and product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		<if test="analysisProductPeriod.kpiType != 0">
+			AND KPI IN 
+				  (SELECT 
+				    a.KPI 
+				  FROM
+				    t_kpi_dictionary a 
+				  WHERE a.type = #{analysisProductPeriod.kpiType,jdbcType=VARCHAR})
+		</if>
+		<if test="analysisProductPeriod.kpiCodes != null ">
+			and kpi in
+			<foreach item="kpiCode" index="index" collection="analysisProductPeriod.kpiCodes" open="(" separator="," close=")">  
+	            #{kpiCode}  
+	  		</foreach>
+		</if>
+	</if>
+	</delete>
+	
+	<!-- 获取产品最大日期及最小日期 -->
+	<select  id="getJobProductDate" parameterType="String" resultType="map">
+		SELECT 
+		  (
+		    CASE
+		      WHEN COUNT(temp.kpiType) > 1 
+		      THEN 0 
+		      ELSE temp.kpiType 
+		    END
+		  ) kpiType,
+		  min(temp.minDate) minDate,
+		  max(temp.maxDate) maxDate 
+		FROM
+		  (SELECT 
+		    DISTINCT (t.kpi_type) kpiType,
+		    MIN(t.date) minDate,
+		    MAX(t.date) maxDate 
+		  FROM
+		    t_pending_job t 
+		  WHERE t.is_working = '1'
+		   <if test="productId != null and productId != ''">
+				and t.product_id = #{productId,jdbcType=VARCHAR}
+			</if>
+		  GROUP BY t.kpi_type) temp 
+	</select>
+	<!-- 获取需要计算指标的产品ID列表 -->
+	<select  id="getJobProductIds" parameterType="String"  resultType="String">
+		SELECT DISTINCT(product_id) 
+		FROM t_pending_job b
+		LEFT JOIN t_product p ON b.product_id = p.id
+		 <if test="productId != null and productId != ''">
+				WHERE product_id = #{productId,jdbcType=VARCHAR}
+			</if>
+		ORDER BY p.is_parent_product
+	</select>
+	
+	<!-- 获取综合排名补录的起始日期 -->
+	<select  id="getMinDateFromPendingJob" parameterType="String"  resultType="String">
+		SELECT MIN(DATE) FROM t_pending_job
+		WHERE 1=1
+		   <if test="productId != null and productId != ''">
+				and product_id = #{productId,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+</mapper>

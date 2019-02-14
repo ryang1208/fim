@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductPeriodKPIStatisticsMapper">
+
+	<!-- 获取第一笔交易日期 -->
+	<select id="getFistDate" parameterType="String" resultType="String">
+		SELECT ts.date FROM t_product_period_kpi_statistics ts
+		WHERE
+		ts.product_id =
+		#{productID,jdbcType=VARCHAR}
+		AND ts.KPI =
+		#{kpicode,jdbcType=VARCHAR}
+		ORDER BY ts.date LIMIT 1
+	</select>
+
+	<!-- 计算股票仓位 -->
+	<select id="getStockPosition" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT
+		tv.date DATE,
+		tv.product_id productID,
+		#{profitAndLossCalculationRequest.kpi,jdbcType=VARCHAR} KPI,
+		#{profitAndLossCalculationRequest.dataSource,jdbcType=VARCHAR}
+		dataSource,
+		DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		ROUND(
+		(
+		CASE
+		WHEN
+		tv.today = 0
+		THEN 0
+		ELSE MarketValue.today / tv.today
+		END
+		),
+		8
+		) today
+		FROM
+		t_product_period_kpi_statistics tv
+		LEFT JOIN
+		(SELECT
+		a.date,
+		a.product_id,
+		a.today
+		FROM
+		t_product_period_kpi_statistics a
+		WHERE a.date = #{profitAndLossCalculationRequest.statDate,jdbcType = VARCHAR}
+		AND
+		a.KPI = '020063'
+		<if
+			test="profitAndLossCalculationRequest.productId != null and
+		profitAndLossCalculationRequest.productId != ''">
+			AND a.product_id
+			=#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		) MarketValue
+		ON MarketValue.date = tv.date
+		AND MarketValue.product_id =
+		tv.product_id
+		WHERE tv.date = #{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR}
+		<if
+			test="profitAndLossCalculationRequest.productId != null and
+		profitAndLossCalculationRequest.productId != ''">
+			AND tv.product_id =
+			#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		AND tv.KPI='020099'
+		GROUP BY tv.date
+	</select>
+
+	<!-- 查询股票仓位收益率 -->
+	<select id="getStockPositionYieldRateList" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT
+		ts.date date,
+		ts.product_id productID,
+		(YieldRate.until_now *100)
+		untilNow,
+		(ts.today *100) today
+		FROM
+		t_product_period_kpi_statistics ts
+		LEFT JOIN
+		(SELECT
+		DATE,
+		product_id,
+		until_now
+		FROM
+		t_product_period_kpi_statistics
+		WHERE
+		product_id =
+		#{analysisSearchRequest.productId,jdbcType=VARCHAR}
+		AND
+		KPI = '020032'
+		<if
+			test="analysisSearchRequest.beginDate != null and
+		   analysisSearchRequest.beginDate != ''">
+			AND DATE
+			&gt;=#{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+		</if>
+		) YieldRate
+		ON
+		YieldRate.date=ts.date
+		AND
+		YieldRate.product_id=ts.product_id
+		WHERE
+		ts.product_id =
+		#{analysisSearchRequest.productId,jdbcType=VARCHAR}
+		AND ts.KPI =
+		#{analysisSearchRequest.kpiCode,jdbcType=VARCHAR}
+		<if
+			test="analysisSearchRequest.beginDate != null and
+		   analysisSearchRequest.beginDate != ''">
+			AND ts.date
+			&gt;=#{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+		</if>
+	</select>
+
+	<!-- 获取收益率和收益率标准差 -->
+	<select id="getStandardDeviationYieldRate" parameterType="map"
+		resultType="com.quantdo.iwin.entity.StandardDeviationYieldRate">
+		SELECT
+		ts.date date,
+		ts.product_id productID,
+		YieldRate.until_now
+		yruntilNow,
+		ts.until_now tsuntilNow
+		FROM
+		t_product_period_kpi_statistics ts
+		LEFT JOIN
+		(SELECT
+		DATE,
+		product_id,
+		until_now
+		FROM
+		t_product_period_kpi_statistics
+		WHERE
+		product_id =
+		#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		AND
+		KPI =
+		'020032'
+		<if
+			test="profitAndLossCalculationRequest.statDate != null and
+		   profitAndLossCalculationRequest.statDate != ''">
+			AND DATE
+			=#{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR}
+		</if>
+		) YieldRate
+		ON
+		YieldRate.date=ts.date
+		AND
+		YieldRate.product_id=ts.product_id
+		WHERE
+		ts.product_id =
+		#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		AND
+		ts.KPI = '030023'
+		<if
+			test="profitAndLossCalculationRequest.statDate != null and
+		   profitAndLossCalculationRequest.statDate != ''">
+			AND ts.date
+			=#{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR}
+		</if>
+	</select>
+	<!-- 获取M2测度 -->
+	<select id="getM2MeasureByIndexID" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductIndexPeriodKPIStatistics">
+		select ts.date date,ts.value value from t_product_index_period_kpi_statistics ts
+		WHERE
+		ts.product_id = #{analysisSearchRequest.productId, jdbcType=VARCHAR} 
+		AND ts.KPI = #{analysisSearchRequest.kpiCode, jdbcType=VARCHAR} 
+		AND ts.index_id = #{analysisSearchRequest.indexcode, jdbcType=VARCHAR} 
+		AND ts.period_type = '6' 
+		<if	test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate != ''">
+			AND ts.date
+			&gt;=#{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+		</if>
+		ORDER BY ts.date asc
+    </select>
+    
+    <!-- 获取择时选股能力指标-->
+	<select id="getTMModelByProductIdAndDate" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		select ts.date date,ts.today today from t_product_period_kpi_statistics ts
+		WHERE
+		ts.product_id = #{attributionAnalysisRequest.productId,jdbcType=VARCHAR}
+		AND ts.KPI =#{attributionAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+		<if
+			test="attributionAnalysisRequest.beginDate != null and
+		   attributionAnalysisRequest.beginDate != ''">
+			AND ts.date
+			&gt;=#{attributionAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		</if> 
+    </select>
+
+	
+	<!-- 获取指定区间及产品的托管机构类型 -->
+	<select id="getTrusteeAndDate" parameterType="map" resultType="com.quantdo.iwin.entity.FundValuation">
+		SELECT 
+		  t.date,
+		  t.trustee_id trusteeId
+		FROM
+		  t_fund_valuation_table t 
+		  LEFT JOIN t_account a 
+		    ON t.trustee_id = a.trustee_id 
+		WHERE t.date &gt;= #{request.beginDate,jdbcType=VARCHAR} 
+		  AND t.date &lt;= #{request.endDate,jdbcType=VARCHAR} 
+		  AND t.product_id = #{request.productId,jdbcType=VARCHAR} 
+		group by t.date ,t.trustee_id 
+	</select>
+	
+    <!-- 计算母子基金估值市值指标 -->
+	<select id="calculateMarketCapitalizationFromValuation"  parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  a.date,
+		  a.product_id productId,
+		  ROUND(
+		    SUM(
+		      IFNULL(a.market_capitalization, 0)
+		    ),
+		    4
+		  ) today,
+		  #{request.kpi,jdbcType=VARCHAR} kpi,
+		  #{request.dataSource,jdbcType=VARCHAR} dataSource,
+		  #{request.statDate,jdbcType=VARCHAR}  statDate
+		  
+		FROM
+		  t_fund_valuation_table a 
+		WHERE a.product_id IN 
+			<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+	            #{id}
+	   		</foreach>  
+		  AND a.date &gt;= #{request.beginDate,jdbcType=VARCHAR}   
+		  AND a.date &lt;= #{request.endDate,jdbcType=VARCHAR}   
+		  AND (
+		  	<if	test="request.kpi != null and request.kpi != '' and request.kpi != '020068' and request.kpi != '020069' and request.kpi != '020086' and request.kpi != '020084' 
+		  		and request.kpi != '020098' and request.kpi != '020081' ">
+		    	(a.account_code IN 
+				  (SELECT 
+				    t.account_id 
+				  FROM
+				    t_account t 
+				  WHERE t.trustee_id = a.trustee_id 
+				    AND t.asset_type = #{assetType,jdbcType=VARCHAR})) 
+		    </if>
+		  
+		    <if	test="request.kpi != null and request.kpi != '' and request.kpi == '020068' ">
+		    	(a.account_code IN 
+				  (SELECT 
+				    t.account_id 
+				  FROM
+				    t_account t 
+				  WHERE t.trustee_id = a.trustee_id 
+				    AND t.asset_type = #{assetType,jdbcType=VARCHAR})) 
+			    OR (a.first_class_account_code ='1031' AND 
+			    (LOCATE("期货",a.account_name)>0 AND LOCATE("保证金",a.account_name)>0) 
+			    AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL
+			    )
+		    </if>
+		    <if	test="request.kpi != null and request.kpi != '' and request.kpi == '020069' ">
+		    	(a.account_code IN 
+				  (SELECT 
+				    t.account_id 
+				  FROM
+				    t_account t 
+				  WHERE t.trustee_id = a.trustee_id 
+				    AND t.asset_type = #{assetType,jdbcType=VARCHAR})) 
+			    OR (a.first_class_account_code ='1031' AND 
+			    ((LOCATE("存出",a.account_name)>0 AND LOCATE("券商",a.account_name)>0) 
+			      OR (LOCATE("存出",a.account_name)>0 AND LOCATE("期权",a.account_name)>0))
+			      AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL
+			    )
+		    </if>
+		    <if	test="request.kpi != null and request.kpi != '' and request.kpi == '020086' ">
+		    	(a.account_code IN 
+				  (SELECT 
+				    t.account_id 
+				  FROM
+				    t_account t 
+				  WHERE t.trustee_id = a.trustee_id 
+				    AND t.asset_type = #{assetType,jdbcType=VARCHAR})) 
+			    OR (a.first_class_account_code ='1021' AND 
+			    (LOCATE("期货",a.account_name)>0 AND LOCATE("清算备付金",a.account_name)>0) 
+			    AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL
+			    )
+		    </if>
+		    <if	test="request.kpi != null and request.kpi != '' and request.kpi == '020084' ">
+		    	(a.account_code IN 
+				  (SELECT 
+				    t.account_id 
+				  FROM
+				    t_account t 
+				  WHERE t.trustee_id = a.trustee_id 
+				    AND t.asset_type = #{assetType,jdbcType=VARCHAR})) 
+			    OR (a.first_class_account_code ='1021' AND 
+			    ((LOCATE("上交所",a.account_name)>0 AND LOCATE("备付金",a.account_name)>0) 
+			      OR (LOCATE("深交所",a.account_name)>0 AND LOCATE("备付金",a.account_name)>0))
+			      AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL
+			    )
+			    OR (a.first_class_account_code ='1031' AND 
+			    ((LOCATE("上交所",a.account_name)>0 AND LOCATE("保证金",a.account_name)>0) 
+			      OR (LOCATE("深交所",a.account_name)>0 AND LOCATE("保证金",a.account_name)>0)
+			      or (LOCATE("上海",a.account_name)>0 AND LOCATE("保证金",a.account_name)>0) 
+			      OR (LOCATE("深圳",a.account_name)>0 AND LOCATE("保证金",a.account_name)>0))
+			      AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL
+			    )
+		    </if>
+		    <if	test="request.kpi != null and request.kpi != '' and request.kpi == '020098' ">
+		    	(a.account_code IN 
+				  (SELECT 
+				    t.account_id 
+				  FROM
+				    t_account t 
+				  WHERE t.trustee_id = a.trustee_id 
+				    AND t.asset_type = #{assetType,jdbcType=VARCHAR})) 
+			    OR (a.first_class_account_code ='1021' AND (LOCATE("个股期权",a.account_name)>0 AND LOCATE("备付金",a.account_name)>0)
+			    	AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL)
+			    OR (a.first_class_account_code ='1031' AND (LOCATE("权证",a.account_name)>0 AND LOCATE("保证金",a.account_name)>0)
+			    	AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL)
+		    </if>
+		    <if	test="request.kpi != null and request.kpi != '' and request.kpi == '020081' ">
+		    	(a.account_code IN 
+				  (SELECT 
+				    t.account_id 
+				  FROM
+				    t_account t 
+				  WHERE t.trustee_id = a.trustee_id 
+				    AND t.asset_type = #{assetType,jdbcType=VARCHAR})) 
+			    OR (a.first_class_account_code ='1521' AND 
+			    ((LOCATE("私募债券",a.account_name)>0 AND LOCATE("成本",a.account_name)>0) 
+			      OR (LOCATE("企业债",a.account_name)>0 AND LOCATE("成本",a.account_name)>0)
+			      OR (LOCATE("短期融资券",a.account_name)>0 AND LOCATE("成本",a.account_name)>0)
+			      OR (LOCATE("超短期融资券",a.account_name)>0 AND LOCATE("成本",a.account_name)>0)
+			      OR (LOCATE("中期票据",a.account_name)>0 AND LOCATE("成本",a.account_name)>0))
+			      AND a.first_class_account_code IS NOT NULL AND a.second_class_account_code IS NULL
+			    )
+		    </if>
+		    )
+		GROUP BY a.date,a.product_id
+	</select>
+	
+	<!-- 计算估值市值指标(其他资产) -->
+     <select id="calculateOtherMarketCapitalizationFromValuation"  parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+     	SELECT 
+		  a.date,
+		  a.product_id productId,
+		  ROUND(
+		    IFNULL(a.today,0) - SUM(
+		      IFNULL(b.market_value, 0)
+		    ),
+		    4
+		  ) today ,
+		  #{request.kpi,jdbcType=VARCHAR} kpi,
+		  #{request.dataSource,jdbcType=VARCHAR} dataSource,
+		  #{request.statDate,jdbcType=VARCHAR}  statDate
+		FROM
+		  (SELECT DATE,product_id,SUM(today) today
+		      FROM t_product_period_kpi_statistics 
+		    WHERE product_id = #{request.productId,jdbcType=VARCHAR}
+		      AND DATE &gt;= #{request.beginDate,jdbcType=VARCHAR} 
+		      AND DATE &lt;= #{request.endDate,jdbcType=VARCHAR} 
+		      AND KPI = '020099'
+		      GROUP BY DATE,product_id
+		      ) a 
+		  LEFT JOIN 
+		    (SELECT DATE, SUM(today) market_value
+		      FROM t_product_period_kpi_statistics 
+		    WHERE product_id = #{request.productId,jdbcType=VARCHAR}
+		      AND DATE &gt;= #{request.beginDate,jdbcType=VARCHAR} 
+		      AND DATE &lt;= #{request.endDate,jdbcType=VARCHAR} 
+		      AND KPI IN ('020082','020083','020068','020097','020069','020081','020070','020085','020086','020084','020098','020071')
+		      GROUP BY DATE
+		      ) b 
+		    ON a.date = b.date 
+		GROUP BY a.date
+	</select>
+	
+	<!-- 获取净值差额和累计净值 -->
+	<select id="findNetValueAndDifferenceByProductId" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.product_id productID,
+		  t.date DATE,
+		  p.net_accumulative_value netAccumulativeValue,
+		  t.today today 
+		FROM
+		 t_product_period_kpi_statistics  t ,t_product_net_value p  
+		WHERE  t.product_id = p.product_id AND t.date = p.date  and (t.product_id = #{productId,jdbcType=VARCHAR}) 
+		  AND (t.kpi = 020101) 
+		ORDER BY t.date 
+	</select>
+	
+</mapper>

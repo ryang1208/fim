@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.StyleAnalysisStatisticsMapper">
+
+	<!-- 交易类型(日内)图表 -->
+	<select id="getDaysTradeTypeList" parameterType="map" resultType="com.quantdo.iwin.response.TradeTypeResponse">
+		<if test="styleAnalysisRequest != null">
+			select	t.date,
+				t1.today+t2.today*2 arbitrage,
+				t3.today*2 hedges,
+				t4.today trend
+				FROM
+				(SELECT product_id,DATE 
+					FROM t_product_period_kpi_statistics 
+					WHERE KPI = '020045' 
+					AND product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+					<if test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate !=''">
+		          		and	date &gt;= #{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+					<if test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate !=''">
+						and	date &lt;= #{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+					</if>
+					)t
+				LEFT JOIN t_product_period_kpi_statistics t1 ON t1.KPI = '030015' AND t.product_id = t1.product_id AND t.date = t1.date
+				left join t_product_period_kpi_statistics t2 on t2.KPI = '030016' and t.product_id = t2.product_id and t.date = t2.date
+				left join t_product_period_kpi_statistics t3 on t3.KPI = '030017' and t.product_id = t3.product_id and t.date = t3.date
+				left join t_product_period_kpi_statistics t4 on t4.KPI = '030018' and t.product_id = t4.product_id and t.date = t4.date
+		  </if>
+  </select>
+	<!-- 交易类型(隔夜)图表 -->
+	<select id="getOverNightTradeTypeList" parameterType="map" resultType="com.quantdo.iwin.response.TradeTypeResponse">
+		<if test="styleAnalysisRequest != null">
+			select	t.date,
+				t1.today+t2.today*2 arbitrage,
+				t3.today*2 hedges,
+				t4.today trend
+				FROM
+				(SELECT product_id,DATE 
+					FROM t_product_period_kpi_statistics 
+					WHERE KPI = '020056' 
+					AND product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+					<if test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate !=''">
+		          		and	date &gt;= #{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+					<if test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate !=''">
+						and	date &lt;= #{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+					</if>
+				)t
+				LEFT JOIN t_product_period_kpi_statistics t1 ON t1.KPI = '030019' AND t.product_id = t1.product_id AND t.date = t1.date
+				left join t_product_period_kpi_statistics t2 on t2.KPI = '030020' and t.product_id = t2.product_id and t.date = t2.date
+				left join t_product_period_kpi_statistics t3 on t3.KPI = '030021' and t.product_id = t3.product_id and t.date = t3.date
+				left join t_product_period_kpi_statistics t4 on t4.KPI = '030022' and t.product_id = t4.product_id and t.date = t4.date
+		  </if>
+  </select>
+  
+  <!-- 交易周期分布图表 -->
+	<select id="getTradePeriodDistributionList" parameterType="map" resultType="com.quantdo.iwin.response.TradePeriodDistributionResponse">
+		<if test="styleAnalysisRequest != null">
+			select * from (select t.contact,
+				'0' bs,
+				t.max_net_position_buy lots,
+				t.max_position_day_buy days
+			from t_product_contact_trade_daily_statistics t
+			where t.max_net_position_buy &gt; 0
+				<if test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate !=''">
+		          	and	t.date &gt;= #{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate !=''">
+		          	and	t.date &lt;= #{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+	          	 <if test="styleAnalysisRequest.productId != null and styleAnalysisRequest.productId !=''">
+		          	and	t.product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+	          	 </if>
+			group by contact,max_position_day_buy desc, max_net_position_buy )buyList group by contact
+			UNION ALL
+			select * from (select t.contact,
+				'1' bs,
+				abs(t.max_net_position_sell) lots,
+				t.max_position_day_sell days
+			from t_product_contact_trade_daily_statistics t
+			where t.max_net_position_sell &lt; 0
+				<if test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate !=''">
+		          	and	t.date &gt;= #{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate !=''">
+		          	and	t.date &lt;= #{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+	          	 <if test="styleAnalysisRequest.productId != null and styleAnalysisRequest.productId !=''">
+		          	and	t.product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+	          	 </if>
+			group by contact,max_position_day_sell desc,abs(t.max_net_position_sell))sellList group by contact
+		  </if>
+  </select>
+  
+	<!-- 日内交易分布图表 -->
+	<select id="getDaysTradeDistributionList" parameterType="map" resultType="com.quantdo.iwin.response.DaysTradeDistributionResponse">
+		<if test="styleAnalysisRequest != null">
+			select t.date,
+				sum(case when t.days_close_turnover_propotion &gt; para.parameter_value then t.days_close_turnover_propotion else 0 end) daysPropotion,
+				1-sum(case when t.days_close_turnover_propotion &gt; para.parameter_value then t.days_close_turnover_propotion else 0 end) nonDaysPropotion
+				from t_product_contact_trade_daily_statistics t
+				left join t_custom_parameter para on para.parameter_code = 'DaysCloseTurnOverRatio'
+				where 1=1 and t.days_turnover &lt;&gt; 0
+			  	 <if test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate !=''">
+		          	and	t.date &gt;= #{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate !=''">
+		          	and	t.date &lt;= #{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+	          	 <if test="styleAnalysisRequest.productId != null and styleAnalysisRequest.productId !=''">
+		          	and	t.product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+	          	 </if>
+	         group by t.date
+		  </if>
+  </select>
+  <!-- 资金容量 -->
+	<select id="getCapitalCapacityList" parameterType="map" resultType="com.quantdo.iwin.response.CapitalCapacityResponse">
+		<if test="styleAnalysisRequest != null">
+			select (select max(f.invester_equity) from t_invester_fund f where f.invester_id = fundList.invester_id and fundList.broker_id = f.broker_id) maxInvesterEquity,
+				fundList.risk_degree maxRiskDegree,
+				fundList.margin_occupied marginOccupied,
+				fundList.invester_equity investerEquity,
+				fundList.date maxRiskDate 
+			from t_invester_fund fundList
+			left join t_product_invester_relationship rel on fundList.invester_id = rel.invester_id and fundList.broker_id = rel.broker_id and rel.invester_type = '1'
+			where 1=1
+			  <if test="styleAnalysisRequest.productId != null and styleAnalysisRequest.productId !=''">
+		         and rel.product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+	          </if>
+	         order by fundList.risk_degree desc limit 1
+		  </if>
+  </select>
+</mapper>

@@ -1,0 +1,567 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.RiskAssessStatisticsMapper">
+
+	<!-- 风险指标 -->
+	<select id="getRiskIndicator" parameterType="map" resultType="com.quantdo.iwin.response.RiskIndicatorResponse">
+		<if test="riskAssessRequest != null">
+		SELECT 
+	        kurtosis.date,
+	        kurtosis.product_id,
+			FORMAT(yearStandardDeviationList.until_now,2) yearStandardDeviation,
+			FORMAT(skewness.today,2) skewness,
+			FORMAT(kurtosis.today,2) kurtosis,
+			FORMAT(thisYearYieldRateList.thisYear*100.00,2) thisYearYieldRate,
+			FORMAT(thisYearYieldRateList.untilNow*100.00,2) byYearYieldRate,
+			FORMAT(dailyList.riskReturnRate,2) riskReturnRate,
+			FORMAT(dailyList.sharpRatio,2) sharpRatio,
+			FORMAT(dailyList.sortinoRatio,2) sortinoRatio,
+			FORMAT(dailyList.calmarRatio,2) calmarRatio,
+			FORMAT(reynorPerformanceMeasure.today*100.00,2) reynorPerformanceMeasure,
+			FORMAT(informationRatio.today*100.00,2) informationRatio,
+			CONCAT('-', FORMAT((IFNULL(maxUnderWaterDrawdown.untilNow,0) * 100.00),2)) maxUnderWaterDrawdown,
+			CONCAT('-', FORMAT((IFNULL(maxWaterDrawdown.untilNow,0) * 100.00),2)) maxWaterDrawdown,
+			FORMAT(maxDrawdownFCycle.untilNow, 0) maxDrawdownFCycle,
+            FORMAT(drawdownFCycle.untilNow, 0) drawdownFCycle
+
+			FROM (SELECT 
+	            pb.product_id,
+	            pb.today today,
+	            pb.date
+	         FROM
+	            t_product_period_kpi_statistics pb
+	        WHERE pb.kpi = 040012 
+	        AND pb.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+	        ORDER BY DATE DESC LIMIT 1
+	       ) kurtosis
+		 LEFT JOIN 
+		   ( SELECT 
+	            pp.until_now until_now,
+	            pp.date
+	         FROM
+	            t_product_period_kpi_statistics pp
+	        WHERE pp.kpi = 040008 
+	        AND pp.product_id=#{riskAssessRequest.productId,jdbcType=VARCHAR}
+	        ORDER BY pp.date DESC LIMIT 1
+	       ) yearStandardDeviationList
+	       ON yearStandardDeviationList.date = kurtosis.date
+	        LEFT JOIN 
+		    (SELECT 
+	            pa.today today,
+	            pa.date
+	         FROM
+	            t_product_period_kpi_statistics pa
+	        WHERE pa.kpi = 040011 
+			AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) skewness
+	       ON skewness.date = kurtosis.date
+	       LEFT JOIN 
+		    (SELECT 
+	             pa.this_year thisYear,
+	             pa.until_now untilNow,
+	             pa.date
+	         FROM
+	            t_product_period_kpi_statistics pa
+	        WHERE pa.kpi = 020032 
+			AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) thisYearYieldRateList
+	       ON thisYearYieldRateList.date = kurtosis.date
+	       LEFT JOIN 
+		(SELECT 
+	             pa.risk_return_ratio riskReturnRate,
+	             pa.sharp_ratio sharpRatio,
+	             pa.sortino_ratio sortinoRatio,
+	             pa.calmar_ratio calmarRatio,
+	             pa.date
+	         FROM
+	            t_product_daily_kpi_statistics pa
+	        WHERE pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) dailyList
+	       ON dailyList.date = kurtosis.date
+	      LEFT JOIN 
+		    (SELECT 
+	             pa.today today,
+	             pa.date
+	         FROM
+	            t_product_period_kpi_statistics pa
+	        WHERE pa.kpi = #{riskAssessRequest.formactionKpi,jdbcType=VARCHAR}
+			AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) reynorPerformanceMeasure
+	       ON reynorPerformanceMeasure.date = kurtosis.date
+	       LEFT JOIN 
+		    (SELECT 
+		      pa.today today,
+		      pa.date
+		    FROM
+		      t_product_period_kpi_statistics pa 
+		    WHERE pa.kpi = #{riskAssessRequest.cycleKpi,jdbcType=VARCHAR} 
+		      AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR} 
+		    ORDER BY DATE DESC 
+		    LIMIT 1) informationRatio 
+		    ON informationRatio.date = kurtosis.date
+		    LEFT JOIN 
+		    (SELECT 
+	             pa.until_now untilNow,
+	             pa.date,
+	             pa.product_id
+	         FROM
+	            t_product_period_kpi_statistics pa
+	        WHERE pa.kpi = 030042 
+			AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) maxUnderWaterDrawdown
+	       ON maxUnderWaterDrawdown.product_id = kurtosis.product_id
+	       LEFT JOIN 
+		    (SELECT 
+	             pa.until_now untilNow,
+	             pa.date,
+	             pa.product_id
+	         FROM
+	            t_product_period_kpi_statistics pa
+	        WHERE pa.kpi = 030043 
+			AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) maxWaterDrawdown
+	       ON maxWaterDrawdown.product_id = kurtosis.product_id
+	       LEFT JOIN 
+		    (SELECT 
+	             pa.until_now untilNow,
+	             pa.date
+	         FROM
+	            t_product_period_kpi_statistics pa
+	        WHERE pa.kpi = 040037 AND pa.until_now &gt; 0
+			AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) maxDrawdownFCycle
+	       ON maxDrawdownFCycle.date = kurtosis.date
+	       LEFT JOIN 
+		    (SELECT 
+	             pa.until_now untilNow,
+	             pa.date
+	         FROM
+	            t_product_period_kpi_statistics pa
+	        WHERE pa.kpi = 040039 AND pa.until_now &gt; 0
+			AND pa.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		ORDER BY DATE DESC LIMIT 1
+	       ) drawdownFCycle
+	       ON drawdownFCycle.date = kurtosis.date
+		  </if>
+  </select>
+	
+<!-- 风险指标 -->
+<select id="getRiskIndicators" parameterType="map" resultType="com.quantdo.iwin.response.RiskIndicatorsResponse">
+	<if test="riskAssessRequest != null">
+			SELECT 
+				(CASE
+				      WHEN last_date = recover_date 
+				      THEN CONCAT(recover_day,'+') 
+				      ELSE t2.max_underwater_drawdown_recover_day
+				    END
+				  ) maxDrawDownCycle
+				FROM (SELECT 
+				    tk.DATE last_date ,
+				    tk.product_id,
+				    tk.max_underwater_drawdown_recover_day recover_day
+				  FROM
+				    t_product_daily_kpi_statistics tk
+				  WHERE tk.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+				  ORDER BY tk.DATE DESC 
+				  LIMIT 1) tt 
+				  INNER JOIN 
+				    (SELECT 
+				      ss.date recover_date,
+				      ss.max_underwater_drawdown_recover_day ,
+				      ss.net_accumulative_value,
+				      ss.product_id
+				    FROM
+				      t_product_daily_kpi_statistics ss 
+				    WHERE ss.product_id =#{riskAssessRequest.productId,jdbcType=VARCHAR}
+				      AND ss.max_underwater_drawdown_recover_day &gt; 0 
+				    ORDER BY ss.date DESC 
+				    LIMIT 1) t2  
+				    ON tt.product_id=t2.product_id
+				    INNER JOIN
+				    (	SELECT 
+					  p.id 
+					FROM t_product p  WHERE  p.id= #{riskAssessRequest.productId,jdbcType=VARCHAR}
+					)t3
+					ON tt.product_id=t3.id
+          	 	 </if>
+		</select> 
+  <!-- 风险指标 -->
+  <select id="getRiskCycle" parameterType="map" resultType="com.quantdo.iwin.response.RiskCycleResponse">
+	<if test="riskAssessRequest != null">
+		SELECT 
+		  (
+		    CASE
+		      WHEN tt.recoverday = t2.recoverdate 
+		      THEN FORMAT(t2.recoverdate, 0)
+		      ELSE CONCAT(FORMAT(t2.recoverdate, 0), '+') 
+		    END
+		  ) drawdownRCycle,
+		  maxDrawdownRCycle.maxDrawdownRCycle maxDrawdownRCycle
+		FROM
+		  (SELECT 
+		    tk.DATE last_date,
+		    tk.product_id,
+		    tk.until_now recoverday 
+		  FROM
+		    t_product_period_kpi_statistics tk 
+		  WHERE tk.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR} 
+		    AND tk.KPI = 040040 
+		  ORDER BY tk.DATE DESC 
+		  LIMIT 1, 1) tt 
+		  INNER JOIN 
+		    (SELECT 
+		      ss.date recover_date,
+		      ss.until_now recoverdate,
+		      ss.product_id 
+		    FROM
+		      t_product_period_kpi_statistics ss 
+		    WHERE ss.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR} 
+		      AND ss.KPI = 040040 
+		      AND ss.until_now > 0 
+		    ORDER BY ss.date DESC 
+		    LIMIT 1) t2 
+		    ON tt.product_id = t2.product_id 
+		  INNER JOIN 
+		    (SELECT 
+		      p.id 
+		    FROM
+		      t_product p 
+		    WHERE p.id = #{riskAssessRequest.productId,jdbcType=VARCHAR}) t3 
+		    ON tt.product_id = t3.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      (
+		        CASE
+		          WHEN tt.recoverday = t2.recoverdate 
+		          THEN FORMAT(t2.recoverdate, 0)
+		          ELSE CONCAT(FORMAT(t2.recoverdate, 0), '+') 
+		        END
+		      ) maxDrawdownRCycle,
+		      tt.product_id 
+		    FROM
+		      (SELECT 
+		        tk.DATE last_date,
+		        tk.product_id,
+		        tk.until_now recoverday 
+		      FROM
+		        t_product_period_kpi_statistics tk 
+		      WHERE tk.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR} 
+		        AND tk.KPI = 040038 
+		      ORDER BY tk.DATE DESC 
+		      LIMIT 1, 1) tt 
+		      INNER JOIN 
+		        (SELECT 
+		          ss.date recover_date,
+		          ss.until_now recoverdate,
+		          ss.product_id 
+		        FROM
+		          t_product_period_kpi_statistics ss 
+		        WHERE ss.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR} 
+		          AND ss.KPI = 040038 
+		          AND ss.until_now > 0 
+		        ORDER BY ss.date DESC 
+		        LIMIT 1) t2 
+		        ON tt.product_id = t2.product_id 
+		      INNER JOIN 
+		        (SELECT 
+		          p.id 
+		        FROM
+		          t_product p 
+		        WHERE p.id = #{riskAssessRequest.productId,jdbcType=VARCHAR} ) t3 
+		        ON tt.product_id = t3.id) maxDrawdownRCycle 
+		    ON tt.product_id = maxDrawdownRCycle.product_id 		    
+          </if>
+		</select> 
+	<!-- 每日仓位曲线 -->
+	<select id="getPositionList" parameterType="map" resultType="com.quantdo.iwin.response.PositionResponse">
+		<if test="riskAssessRequest != null">
+		select	t.date,
+			  	format(t.until_now*100.00,2) position,
+				format(t2.until_now*100.00,2) fiveDaysAveragePosition
+			  FROM
+			  t_product_period_kpi_statistics t 
+				left join t_product_period_kpi_statistics t2 on t2.KPI = '030004' and t.product_id = t2.product_id and t.date = t2.date
+			WHERE 1=1
+			 and t.KPI = #{riskAssessRequest.kpiCode,jdbcType=VARCHAR}
+		  	 <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	t.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	t.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	 <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+	          	and	t.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+		  </if>
+  </select>
+
+	<!-- 账户风险度 -->
+	<select id="getRiskDegreeList" parameterType="map" resultType="com.quantdo.iwin.response.RiskDegreeResponse">
+		<if test="riskAssessRequest != null">
+			select 
+				base.date,
+				truncate(base.risk_degree*100,2) riskDegree,
+				(SELECT truncate(avgRisk.until_now * 100, 2)
+					FROM t_product_period_kpi_statistics avgRisk
+					where 1=1 
+					 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+			          	and	date &lt; #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+					and avgRisk.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+					and avgRisk.KPI = '030005' 
+					order by avgRisk.date desc limit 1 
+					) averageRiskDegree
+			from t_invester_fund base
+			left join t_product_invester_relationship rel on base.invester_id = rel.invester_id and base.broker_id = rel.broker_id and rel.invester_type = '1'
+			where 1=1
+		  	 <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	base.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	base.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	 <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+	          	and	rel.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+		  </if>
+  </select>
+  
+  <!-- 账户仓位风险度 -->
+	<select id="getPositionRiskDegreeList" parameterType="map" resultType="com.quantdo.iwin.response.RiskDegreeResponse">
+		<if test="riskAssessRequest != null">
+			select 
+				base.date,
+				truncate(base.risk_degree*100,2) riskDegree,
+				(SELECT truncate(avgRisk.until_now * 100, 2)
+					FROM t_product_period_kpi_statistics avgRisk
+					where 1=1 
+					 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+			          	and	date &lt; #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+					and avgRisk.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR} 
+					and avgRisk.KPI = '030005' 
+					order by avgRisk.date desc limit 1 
+					) averageRiskDegree,
+					position.fiveDaysAveragePosition fiveDaysAveragePosition
+			from t_invester_fund base
+			left join t_product_invester_relationship rel on base.invester_id = rel.invester_id and base.broker_id = rel.broker_id and rel.invester_type = '1'
+			left join(
+			select	t.date date,
+			  	format(t.until_now*100.00,2) position,
+				format(t2.until_now*100.00,2) fiveDaysAveragePosition
+			  FROM
+			  t_product_period_kpi_statistics t 
+				left join t_product_period_kpi_statistics t2 on t2.KPI = '030004' and t.product_id = t2.product_id and t.date = t2.date
+			WHERE 1=1
+			 and t.KPI = '020044'
+		  	 <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	t.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	t.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	 <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+	          	and	t.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+          	 </if>) position 
+          	 on base.date = position.date
+			where 1=1
+		  	 <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	base.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	base.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	 <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+	          	and	rel.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+		  </if>
+  </select>
+	
+	<!-- 净值回撤率 -->
+	<select id="getDrawDownList" parameterType="map" resultType="com.quantdo.iwin.response.DrawDownResponse">
+		<if test="riskAssessRequest != null">
+			SELECT 
+			  t.date,
+			  format(t.until_now*100.00,2)  amount,
+			  minAmountList.min_amount
+			FROM
+			  t_product_period_kpi_statistics t 
+			JOIN (SELECT FORMAT((a.value)*100.00,2) min_amount,a.product_id
+			FROM
+			  t_product_period_statistics a 
+			WHERE a.kpi = 040006 
+			  AND a.period_type = 0
+			  <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+				AND a.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR} 
+				</if>
+			ORDER BY a.date DESC 
+			LIMIT 1)minAmountList ON minAmountList.product_id = t.product_id
+			WHERE 1=1
+			 and t.KPI = #{riskAssessRequest.kpiCode,jdbcType=VARCHAR}
+		  	 <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	t.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	t.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	 <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+	          	and	t.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+		  </if>
+  </select>
+  <!-- 五日波动率曲线 -->
+	<select id="getFluctuationList" parameterType="map" resultType="com.quantdo.iwin.response.FluctionResponse">
+		<if test="riskAssessRequest != null">
+		SELECT 
+		  t.date DATE,
+		  FORMAT(nn.today * 100.00, 2) today,
+		  t.product_id,
+		  t.net_accumulative_value valuea 
+		FROM
+		 t_product_net_value  t 
+		  LEFT JOIN (SELECT n.date,n.today,n.product_id FROM t_product_period_kpi_statistics n 
+		  WHERE n.KPI = '030050' 
+		  AND n.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		)nn
+		    ON t.product_id = nn.product_id 
+		    AND t.date = nn.date 
+		          WHERE t.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+			            <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	t.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	t.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+		        GROUP BY t.date ASC		  </if>
+  </select>
+  
+  <!--  风险价值曲线 99% -->
+	<select id="getRiskVlueNinetynine" parameterType="map" resultType="com.quantdo.iwin.response.RiskValueNinetynineResponse">
+		<if test="riskAssessRequest != null">
+		SELECT * FROM(	SELECT 
+		  t.date date,
+		   CASE WHEN tt.today IS NULL OR tt.today =0 THEN 0 ELSE ABS( CONVERT(t.today, DECIMAL (15, 2)))*100/tt.today  END fiveMarkday,
+		   CASE WHEN tt.today IS NULL OR tt.today =0 THEN 0 ELSE round(ABS( tb.today)*100/tt.today,4)  END tenMarkday,
+ 		   CASE WHEN tt.today IS NULL OR tt.today =0 THEN 0 ELSE ROUND(ABS( tq.today)*100/tt.today,4)  END twentyMarkday
+		FROM
+		  t_product_period_kpi_statistics t 
+		  LEFT JOIN 
+		    (SELECT 
+		      tt.date,
+		      tt.product_id,
+		       CONVERT(tt.today,DECIMAL(15,2)) today 
+		    FROM
+		      t_product_period_kpi_statistics tt 
+		    WHERE tt.KPI = '030110' 
+		      AND tt.product_id =  #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		      ) tb 
+		    ON tb.product_id = t.product_id 
+		    AND tb.date = t.date 
+		  LEFT JOIN 
+		    (SELECT 
+		      ta.date,
+		      ta.product_id,
+		       CONVERT(ta.today,DECIMAL(15,2)) today
+		    FROM
+		      t_product_period_kpi_statistics ta 
+		    WHERE ta.KPI = '030111' 
+		      AND ta.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		      ) tq 
+		    ON tq.product_id = t.product_id 
+		    AND tq.date = t.date 
+	      LEFT JOIN 
+		      (SELECT 
+		        ta.date,
+		        ta.product_id,
+		        CONVERT(ta.today, DECIMAL (15, 2)) today 
+		      FROM
+		        t_product_period_kpi_statistics ta 
+		      WHERE ta.KPI = '020099' 
+		        AND ta.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}) tt 
+		      ON tt.product_id = t.product_id 
+		      AND tt.date = t.date 
+		WHERE t.KPI = '030109' 
+		  	 <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	t.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	t.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	  <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+		          and t.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+          	  )V
+		          WHERE v.fiveMarkday IS NOT NULL
+		  </if>
+  </select>
+   <!--  风险价值曲线 95%-->
+	<select id="getRiskVlueNinetyFive" parameterType="map" resultType="com.quantdo.iwin.response.RiskValueNinetyFiveResponse">
+		<if test="riskAssessRequest != null">
+			SELECT * FROM(	SELECT 
+		  t.date date,
+		  CASE WHEN tt.today IS NULL OR tt.today =0 THEN 0 ELSE ABS( CONVERT(t.today, DECIMAL (15, 2)))*100/tt.today END fiveMarkday,
+		  CASE WHEN tt.today IS NULL OR tt.today =0 THEN 0 ELSE ROUND(ABS( tb.today)*100/tt.today,4)  END tenMarkday,
+ 		  CASE WHEN tt.today IS NULL OR tt.today =0 THEN 0 ELSE ROUND(ABS( tq.today)*100/tt.today,4)  END twentyMarkday
+		FROM
+		  t_product_period_kpi_statistics t 
+		  LEFT JOIN 
+		    (SELECT 
+		      tt.date,
+		      tt.product_id,
+		       CONVERT(tt.today,DECIMAL(15,2)) today 
+		    FROM
+		      t_product_period_kpi_statistics tt 
+		    WHERE tt.KPI = '030107' 
+		      AND tt.product_id =  #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		      ) tb 
+		    ON tb.product_id = t.product_id 
+		    AND tb.date = t.date 
+		  LEFT JOIN 
+		    (SELECT 
+		      ta.date,
+		      ta.product_id,
+		       CONVERT(ta.today,DECIMAL(15,2)) today
+		    FROM
+		      t_product_period_kpi_statistics ta 
+		    WHERE ta.KPI = '030108' 
+		      AND ta.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		      ) tq 
+		    ON tq.product_id = t.product_id 
+		    AND tq.date = t.date
+		  LEFT JOIN 
+		      (SELECT 
+		        ta.date,
+		        ta.product_id,
+		        CONVERT(ta.today, DECIMAL (15, 2)) today 
+		      FROM
+		        t_product_period_kpi_statistics ta 
+		      WHERE ta.KPI = '020099' 
+		        AND ta.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+		       ) tt 
+		      ON tt.product_id = t.product_id 
+		      AND tt.date = t.date  
+		WHERE t.KPI = '030106' 
+		  	 <if test="riskAssessRequest.beginDate != null and riskAssessRequest.beginDate !=''">
+	          	and	t.date &gt;= #{riskAssessRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="riskAssessRequest.endDate != null and riskAssessRequest.endDate !=''">
+	          	and	t.date &lt;= #{riskAssessRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	  <if test="riskAssessRequest.productId != null and riskAssessRequest.productId !=''">
+		          and t.product_id = #{riskAssessRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+          	 )X
+		          WHERE x.fiveMarkday IS NOT NULL
+		  </if>
+  </select>
+</mapper>

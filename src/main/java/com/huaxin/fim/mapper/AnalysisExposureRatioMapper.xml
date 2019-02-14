@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisExposureRatioMapper">
+	<select id="calculatExposureRatioByPeriod" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date DATE,
+		  tp.product_id productID,
+		  #{kpiCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN (
+		          t.invester_equity - IFNULL(inMoney.incomeMoney, 0)
+		        ) = 0 
+		        THEN 99999 
+		        ELSE (
+		          IFNULL(temp.buyMargin, 0) - IFNULL(temp.sellMargin, 0)
+		        ) / (
+		          t.invester_equity - IFNULL(inMoney.incomeMoney, 0)
+		        ) 
+		      END
+		    ),
+		    8
+		  ) today 
+		FROM
+		  t_invester_fund t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id,
+		      product_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR} 
+		      AND invester_type = '1') tp 
+		    ON 1 = 1 
+		  LEFT JOIN 
+		    (SELECT 
+		      t.invester_id investerId,
+		      t.broker_id brokerId,
+		      t.date DATE,
+		      SUM(
+		        CASE
+		          WHEN t.type_deposit_withdrawal = '1' 
+		          THEN IFNULL(t.deposit, 0) 
+		          ELSE 0 
+		        END
+		      ) incomeMoney 
+		    FROM
+		      t_invester_deposit_withdrawal t 
+		    WHERE t.DATE &gt;=#{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR} 
+		      AND t.DATE &lt;=#{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}  
+		    GROUP BY t.date,
+		      t.invester_id,
+		      t.broker_id) inMoney 
+		    ON inMoney.investerId = t.invester_id 
+		    AND inMoney.brokerId = t.broker_id 
+		    AND inMoney.date = t.date 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.invester_id,
+		      a.broker_id,
+		      a.date,
+		      SUM(
+		        CASE
+		          WHEN a.bs = '0' 
+		          THEN 
+		          CASE
+		            WHEN a.margin IS NULL 
+		            THEN 0 
+		            ELSE a.margin 
+		          END 
+		          ELSE 0 
+		        END
+		      ) buyMargin,
+		      SUM(
+		        CASE
+		          WHEN a.bs = '1' 
+		          THEN 
+		          CASE
+		            WHEN a.margin IS NULL 
+		            THEN 0 
+		            ELSE a.margin 
+		          END 
+		          ELSE 0 
+		        END
+		      ) sellMargin 
+		    FROM
+		      t_position_summary a 
+		    WHERE DATE &gt;=#{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}  
+		      AND DATE &lt;=#{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}  
+		    GROUP BY a.date,
+		      a.invester_id,
+		      a.broker_id) temp 
+		    ON temp.invester_id = t.invester_id 
+		    AND temp.broker_id = t.broker_id 
+		    AND temp.date = t.date 
+		WHERE t.invester_id IN (tp.invester_id) 
+		  AND t.broker_id IN (tp.broker_id) 
+		  AND t.date &gt;=#{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}  
+		  AND t.date &lt;=#{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}  
+		GROUP BY t.date,
+		  t.invester_id,
+		  t.broker_id 
+	</select>
+</mapper>

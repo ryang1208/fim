@@ -1,0 +1,632 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductIndustryPeriodStatisticsMapper">
+
+	<!-- 计算行业市值 -->
+	<select id="getStockIndustryMarket" parameterType="map"
+		resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  p.date,
+		  p.invester_id investerID,
+		  p.broker_id brokerID,
+		  p.industry industry,
+		  SUM(IFNULL(p.market_capitalization,0)) marketCapitalization 
+		FROM
+		  t_position_summary p 
+		  LEFT JOIN t_product_invester_relationship t 
+		    ON p.invester_id = t.invester_id 
+		    AND p.broker_id = t.broker_id 
+		WHERE 
+		  p.market_type= 2  
+		  AND p.industry IS NOT NULL 
+		<if test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND t.product_id =
+			#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		GROUP BY p.date,p.industry
+	</select>
+	
+	<select id="getStockIndustryUpDown" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT
+		t.date,
+		tp.product_id productId,
+		t.industry industry,
+		#{profitAndLossCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		#{profitAndLossCalculationRequest.dataSource ,jdbcType=VARCHAR}
+		dataSource,
+		DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		NULL today,
+		ROUND(
+		(
+		CASE
+		WHEN oneMonthTemp.market = 0
+		THEN 0
+		ELSE (
+		t.market_capitalization - oneMonthTemp.market
+		) / oneMonthTemp.market
+		END
+		),
+		8
+		) oneMonth,
+		ROUND(
+		(
+		CASE
+		WHEN threeMonthTemp.market = 0
+		THEN 0
+		ELSE (
+		t.market_capitalization - threeMonthTemp.market
+		) /
+		threeMonthTemp.market
+		END
+		),
+		8
+		) threeMonth,
+		ROUND(
+		(
+		CASE
+		WHEN
+		sixMonthTemp.market = 0
+		THEN 0
+		ELSE (
+		t.market_capitalization -
+		sixMonthTemp.market
+		) / sixMonthTemp.market
+		END
+		),
+		8
+		) sixMonth,
+		ROUND(
+		(
+		CASE
+		WHEN oneYearTemp.market = 0
+		THEN 0
+		ELSE (
+		t.market_capitalization -
+		oneYearTemp.market
+		) / oneYearTemp.market
+		END
+		),
+		8
+		) oneYear,
+		ROUND(
+		(
+		CASE
+		WHEN thisYearTemp.market = 0
+		THEN 0
+		ELSE (
+		t.market_capitalization -
+		thisYearTemp.market
+		) / thisYearTemp.market
+		END
+		),
+		8
+		) thisYear,
+		ROUND(
+		(
+		CASE
+		WHEN untilNowTemp.market = 0
+		THEN 0
+		ELSE (
+		t.market_capitalization -
+		untilNowTemp.market
+		) / untilNowTemp.market
+		END
+		),
+		8
+		) untilNow
+		FROM
+		t_position_summary t
+		LEFT JOIN t_product_invester_relationship tp
+		ON
+		t.invester_id = tp.invester_id
+		AND t.broker_id = tp.broker_id
+		LEFT JOIN
+		(SELECT
+		a.invester_id,
+		a.broker_id,
+		a.market_capitalization market
+		FROM
+		t_position_summary a
+		WHERE a.date =
+		#{profitAndLossCalculationRequest.oneMonth,jdbcType=VARCHAR}
+		AND
+		a.market_type = '2' and a.industry is not null) oneMonthTemp
+		ON
+		oneMonthTemp.invester_id = t.invester_id
+		AND oneMonthTemp.broker_id =
+		t.broker_id
+		LEFT JOIN
+		(SELECT
+		a.invester_id,
+		a.broker_id,
+		a.market_capitalization market
+		FROM
+		t_position_summary a
+		WHERE a.date =
+		#{profitAndLossCalculationRequest.threeMonth,jdbcType=VARCHAR}
+		AND
+		a.market_type = '2' and a.industry is not null) threeMonthTemp
+		ON
+		threeMonthTemp.invester_id = t.invester_id
+		AND threeMonthTemp.broker_id
+		= t.broker_id
+		LEFT JOIN
+		(SELECT
+		a.invester_id,
+		a.broker_id,
+		a.market_capitalization market
+		FROM
+		t_position_summary a
+		WHERE a.date =
+		#{profitAndLossCalculationRequest.sixMonth,jdbcType=VARCHAR}
+		AND
+		a.market_type = '2' and a.industry is not null) sixMonthTemp
+		ON
+		sixMonthTemp.invester_id = t.invester_id
+		AND sixMonthTemp.broker_id =
+		t.broker_id
+		LEFT JOIN
+		(SELECT
+		a.invester_id,
+		a.broker_id,
+		a.market_capitalization market
+		FROM
+		t_position_summary a
+		WHERE a.date =
+		#{profitAndLossCalculationRequest.oneYear,jdbcType=VARCHAR}
+		AND
+		a.market_type = '2' and a.industry is not null) oneYearTemp
+		ON
+		oneYearTemp.invester_id = t.invester_id
+		AND oneYearTemp.broker_id =
+		t.broker_id
+		LEFT JOIN
+		(SELECT
+		a.invester_id,
+		a.broker_id,
+		a.market_capitalization market
+		FROM
+		t_position_summary a
+		WHERE a.date =
+		#{profitAndLossCalculationRequest.thisYear,jdbcType=VARCHAR}
+		AND
+		a.market_type = '2' and a.industry is not null) thisYearTemp
+		ON
+		thisYearTemp.invester_id = t.invester_id
+		AND thisYearTemp.broker_id =
+		t.broker_id
+		LEFT JOIN
+		(SELECT
+		a.invester_id,
+		a.broker_id,
+		a.market_capitalization market
+		FROM
+		t_position_summary a
+		WHERE
+		a.market_type = '2' and a.industry is not null
+		ORDER BY a.date
+		LIMIT 1)
+		untilNowTemp
+		ON untilNowTemp.invester_id = t.invester_id
+		AND
+		untilNowTemp.broker_id = t.broker_id
+		WHERE t.date =
+		#{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR}
+		AND
+		t.market_type = '2'
+		and t.industry is not null
+		<if
+			test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND tp.product_id =
+			#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+	</select>
+
+	<!-- 计算行业风险暴露（产品） -->
+	<select id="getStockExposure" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT
+		t.date,
+		tp.product_id productId,
+		t.industry industry,
+		#{profitAndLossCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		#{profitAndLossCalculationRequest.dataSource ,jdbcType=VARCHAR}
+		dataSource,
+		DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		SUM(t.market_capitalization) / total.totalmarket today,
+		NULL oneMonth,
+		NULL threeMonth,
+		NULL sixMonth,
+		NULL oneYear,
+		NULL thisYear,
+		NULL untilNow
+		FROM
+		t_position_summary t
+		LEFT JOIN t_product_invester_relationship tp
+		ON t.invester_id = tp.invester_id
+		AND t.broker_id = tp.broker_id
+		LEFT
+		JOIN
+		(SELECT
+		DATE,
+		SUM(market_capitalization) totalmarket
+		FROM
+		t_position_summary
+		WHERE DATE =
+		#{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR}
+		AND
+		market_type = '2'
+		AND industry IS NOT NULL
+		GROUP BY date) total
+		ON
+		total.date = t.date
+		WHERE t.date =
+		#{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR}
+		AND
+		t.market_type = '2'
+		AND t.industry IS NOT NULL
+		<if
+			test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND tp.product_id =
+			#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		GROUP BY t.industry
+	</select>
+	
+	<!-- 多空方成交总额 -->
+	<select id="getBuyTurnover" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date DATE,
+		  SUM(t.turnover) today
+		FROM
+		  t_transaction_summary t 
+		  LEFT JOIN t_product_invester_relationship tp 
+		    ON tp.invester_id = t.invester_id 
+		    AND t.broker_id = tp.broker_id  
+		WHERE 1=1 
+		<if test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND tp.product_id = #{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		<if test="profitAndLossCalculationRequest.investorType != null and profitAndLossCalculationRequest.investorType != ''">
+			AND t.market_type = #{profitAndLossCalculationRequest.investorType,jdbcType=VARCHAR}
+		</if> 
+		<if test="profitAndLossCalculationRequest.bs != null and profitAndLossCalculationRequest.bs != ''">
+			AND t.bs = #{profitAndLossCalculationRequest.bs,jdbcType=VARCHAR}
+		</if> 
+		GROUP BY t.date 
+	</select>
+	
+	<!-- 净暴露 -->
+	<select id="getNetExposure" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT
+		t.date DATE,
+		t.product_id productID,
+		#{profitAndLossCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		#{profitAndLossCalculationRequest.dataSource,jdbcType=VARCHAR}
+		dataSource,
+		DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		(BuyTurnover.today-SellTurnover.today) today,
+		(BuyTurnover.one_month-SellTurnover.one_month) oneMonth,
+		(BuyTurnover.three_month-SellTurnover.three_month) threeMonth,
+		(BuyTurnover.six_month-SellTurnover.six_month) sixMonth,
+		(BuyTurnover.one_year-SellTurnover.one_year) oneYear,
+		(BuyTurnover.this_year-SellTurnover.this_year) thisYear,
+		(BuyTurnover.until_now-SellTurnover.until_now) untilNow
+		FROM
+		t_product_period_kpi_statistics t
+		LEFT JOIN
+		(SELECT
+		a.date,
+		a.product_id,
+		a.today,
+		a.one_month,
+		a.three_month,
+		a.six_month,
+		a.one_year,
+		a.this_year,
+		a.until_now
+		FROM
+		t_product_period_kpi_statistics a
+		WHERE a.date &gt;=
+		#{profitAndLossCalculationRequest.statDate
+		,jdbcType=VARCHAR}
+		AND a.KPI
+		= '020060'
+		<if
+			test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND a.product_id =
+			#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		) BuyTurnover
+		ON BuyTurnover.date = t.date AND BuyTurnover.product_id =
+		t.product_id
+		LEFT JOIN
+		(SELECT
+		a.date,
+		a.product_id,
+		a.today,
+		a.one_month,
+		a.three_month,
+		a.six_month,
+		a.one_year,
+		a.this_year,
+		a.until_now
+		FROM
+		t_product_period_kpi_statistics a
+		WHERE a.date &gt;=
+		#{profitAndLossCalculationRequest.statDate
+		,jdbcType=VARCHAR}
+		AND a.KPI
+		= '020061'
+		<if
+			test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND a.product_id =
+			#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		) SellTurnover
+		ON SellTurnover.date = t.date AND
+		SellTurnover.product_id = t.product_id
+		WHERE t.date &gt;=
+		#{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR}
+		<if
+			test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND t.product_id =
+			#{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		group by t.date
+	</select>
+	<!-- 暴露比 -->
+	<select id="getExposureRatio" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date DATE,
+		  t.product_id productID,
+		  #{profitAndLossCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{profitAndLossCalculationRequest.dataSource,jdbcType=VARCHAR}dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN Turnover.today = 0 
+		        THEN 0 
+		        ELSE NetExposure.today / Turnover.today 
+		      END
+		    ),
+		    8
+		  ) today,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN Turnover.one_month = 0 
+		        THEN 0 
+		        ELSE NetExposure.one_month / Turnover.one_month 
+		      END
+		    ),
+		    8
+		  ) oneMonth,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN Turnover.three_month = 0 
+		        THEN 0 
+		        ELSE NetExposure.three_month / Turnover.three_month 
+		      END
+		    ),
+		    8
+		  ) threeMonth,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN Turnover.six_month = 0 
+		        THEN 0 
+		        ELSE NetExposure.six_month / Turnover.six_month 
+		      END
+		    ),
+		    8
+		  ) sixMonth,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN Turnover.one_year = 0 
+		        THEN 0 
+		        ELSE NetExposure.one_year / Turnover.one_year 
+		      END
+		    ),
+		    8
+		  ) oneYear,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN Turnover.this_year = 0 
+		        THEN 0 
+		        ELSE NetExposure.this_year / Turnover.this_year 
+		      END
+		    ),
+		    8
+		  ) thisYear,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN Turnover.until_now = 0 
+		        THEN 0 
+		        ELSE NetExposure.until_now / Turnover.until_now 
+		      END
+		    ),
+		    8
+		  ) untilNow 
+		FROM
+		  t_product_period_kpi_statistics t 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.date,
+		      a.product_id,
+		      a.today,
+		      a.one_month,
+		      a.three_month,
+		      a.six_month,
+		      a.one_year,
+		      a.this_year,
+		      a.until_now 
+		    FROM
+		      t_product_period_kpi_statistics a 
+		    WHERE a.KPI = '030086' 
+		      AND a.product_id = #{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR} 
+		      AND a.date &gt;= #{profitAndLossCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		      AND a.date &lt;= #{profitAndLossCalculationRequest.endDate,jdbcType=VARCHAR}  
+		    GROUP BY a.date) NetExposure 
+		    ON NetExposure.date = t.date 
+		    AND NetExposure.product_id = t.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.date,
+		      a.product_id,
+		      a.today,
+		      a.one_month,
+		      a.three_month,
+		      a.six_month,
+		      a.one_year,
+		      a.this_year,
+		      a.until_now 
+		    FROM
+		      t_product_period_kpi_statistics a 
+		    WHERE a.KPI = '020000' 
+		      AND a.product_id = #{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR} 
+		      AND a.date &gt;= #{profitAndLossCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		      AND a.date &lt;= #{profitAndLossCalculationRequest.endDate,jdbcType=VARCHAR} 
+		    GROUP BY a.date) Turnover 
+		    ON Turnover.date = t.date 
+		    AND Turnover.product_id = t.product_id 
+		WHERE t.product_id = #{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}  
+		  AND t.date &gt;= #{profitAndLossCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		  AND t.date &lt;= #{profitAndLossCalculationRequest.endDate,jdbcType=VARCHAR} 
+		GROUP BY t.date 
+	</select>
+
+	<!-- 获取市值配置变化数据 -->
+	<select id="getStockMarketValueRatio" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT i.date as date,i.product_id as productID,i.industry as
+		industry,i.today as today,
+		(SELECT p.today FROM
+		t_product_period_kpi_statistics p WHERE p.KPI = '020063' AND p.date =
+		i.date AND p.product_id = i.product_id) as untilNow
+		FROM
+		t_product_industry_period_statistics i
+		WHERE i.KPI = '020062'
+		AND
+		i.product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+		<if
+			test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate != ''">
+			AND i.date &gt;=
+			#{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		</if>
+		<if
+			test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate != ''">
+			AND i.date &lt;=
+			#{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+		</if>
+		ORDER BY i.date,i.product_id,i.today DESC
+	</select>
+	<!-- 平均净资产 -->
+	<select id="getNetasset" parameterType="map"
+		resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT
+		t.date Date,
+		t.invester_equity today		
+		FROM
+		t_invester_fund t
+		LEFT JOIN t_product_invester_relationship tp
+        ON t.invester_id =  tp.invester_id
+        AND t.broker_id = tp.broker_id
+        where 
+        1 = 1   
+		<if
+			test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+			AND tp.product_id = #{profitAndLossCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+		<if
+			test="profitAndLossCalculationRequest.investorType != null and profitAndLossCalculationRequest.investorType != ''">
+			AND tp.invester_type = #{profitAndLossCalculationRequest.investorType,jdbcType=VARCHAR}
+		</if> 
+		GROUP BY t.date
+	</select>	
+	<!-- 取得股票行业持仓市值占比列表(多账户合并) -->
+	<select id="findIndustryWeightRatioList" parameterType="map" resultType="com.quantdo.iwin.response.TypeSourceListResponse">
+		SELECT 
+			base.product_id productID,
+			base.date,
+			base.industry type,
+			base.numerator,
+			IFNULL(totalList.denominator,0) denominator
+		FROM(
+			SELECT t.product_id,t.date,t.industry,SUM(today) numerator
+			FROM t_product_industry_period_statistics t
+			WHERE t.KPI = 020062
+				<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+					AND t.product_ID = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+				</if>
+				<if test="analysisProductPeriod.endDate != null and analysisProductPeriod.endDate != ''">
+					AND t.date &lt;= #{analysisProductPeriod.endDate,jdbcType=VARCHAR} 
+				</if>
+				<if test="analysisProductPeriod.startDate != null and analysisProductPeriod.startDate != ''">
+					AND t.date >= #{analysisProductPeriod.startDate,jdbcType=VARCHAR}
+				</if>
+			GROUP BY t.product_id,t.date,t.industry)base
+		LEFT JOIN (
+			SELECT t.date,SUM(today) denominator
+			FROM t_product_period_kpi_statistics t
+			WHERE t.KPI = 020099
+				<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+					AND t.product_ID = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+				</if>
+				<if test="analysisProductPeriod.endDate != null and analysisProductPeriod.endDate != ''">
+					AND t.date &lt;= #{analysisProductPeriod.endDate,jdbcType=VARCHAR} 
+				</if>
+				<if test="analysisProductPeriod.startDate != null and analysisProductPeriod.startDate != ''">
+					AND t.date >= #{analysisProductPeriod.startDate,jdbcType=VARCHAR}
+				</if>
+			GROUP BY t.date
+		)totalList ON totalList.date = base.date
+	</select>
+	
+	<!-- 取得持仓基准偏离度 -->
+	<select id="getPositionDeviationRatio" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		SELECT base.date,p.product_name productName,
+			base.industry TYPE,
+			ROUND(base.today*100,2) VALUE,
+			IFNULL(ROUND(indexList.base_weight,2),0.00) indexValue,
+			ROUND(base.today*100,2)-IFNULL(ROUND(indexList.base_weight,2),0.00) ratio
+		FROM (SELECT DATE, product_id,industry,today
+		FROM t_product_industry_period_statistics
+		WHERE KPI = '030136' AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+			AND DATE = (SELECT DATE FROM t_product_industry_period_statistics
+				WHERE KPI = '030136' 
+					AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+					<if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+						AND date = #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+				GROUP BY DATE DESC LIMIT 1))base 
+		LEFT JOIN t_product p ON base.product_id = p.id
+		LEFT JOIN(SELECT i.industry,i.base_weight 
+			FROM t_index_content i 
+			WHERE index_id = (SELECT i.index_id FROM t_index i 
+							INNER JOIN t_index_info f ON i.index_name = f.index_name 
+							AND f.id = #{analysisSearchRequest.indexID,jdbcType=VARCHAR} 
+							GROUP BY i.index_id) 
+				AND DATE = (SELECT DATE FROM t_product_industry_period_statistics
+					WHERE KPI = '030136' 
+						AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+						<if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+						AND date = #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+						</if>
+					GROUP BY DATE DESC LIMIT 1)) indexList ON base.industry = indexList.industry
+
+		
+	</select>
+</mapper>

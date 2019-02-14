@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductIndexPeriodKPIStatisticsMapper">
+
+	<delete id="deleteProductIndexPeriod" parameterType="map">
+		delete from t_product_index_period_kpi_statistics 
+		where date between #{analysisProductPeriod.startDate ,jdbcType=VARCHAR} and #{analysisProductPeriod.endDate ,jdbcType=VARCHAR}
+	<if test="analysisProductPeriod != null">
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			and product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		<if test="analysisProductPeriod.kpiType != 0">
+			AND KPI IN 
+				  (SELECT 
+				    a.KPI 
+				  FROM
+				    t_kpi_dictionary a 
+				  WHERE a.type = #{analysisProductPeriod.kpiType,jdbcType=VARCHAR})
+		</if>
+		<if test="analysisProductPeriod.kpiCodes != null ">
+			and kpi in
+			<foreach item="kpiCode" index="index" collection="analysisProductPeriod.kpiCodes" open="(" separator="," close=")">  
+	            #{kpiCode}  
+	  		</foreach>
+		</if>
+	</if>
+	</delete>
+	
+	<!-- 获取跟踪误差指标 -->
+	<select id="getTrackingErrorList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndexPeriodStatisticsHistory">
+		SELECT 
+		  a.date,
+		  a.index_id indexID,
+		  a.period_type periodType,
+		  a.product_id productID,
+		  a.value 
+		FROM
+		  t_product_index_period_statistics_history a 
+		WHERE a.stat_date = 
+		  (SELECT 
+		    stat_date
+		  FROM
+		    t_product_index_period_statistics_history 
+		  WHERE product_id = #{productID,jdbcType=VARCHAR} and kpi=#{KPI,jdbcType=VARCHAR}
+		  ORDER BY stat_date DESC LIMIT 1
+		  )
+		  <if test="productID != null and productID != ''">
+		  	and a.product_id =#{productID,jdbcType=VARCHAR}
+		  </if>
+		  <if test="KPI != null and KPI != ''">
+		  	and a.kpi =#{KPI,jdbcType=VARCHAR}
+		  </if>
+		  <if test="startDate != null and startDate != ''">
+		  	and a.date &gt;=#{startDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test="endDate != null and endDate != ''">
+		  	and a.date &lt;=#{endDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test="indexIDs != null">
+		  	and a.index_id in
+			<foreach item="indexId" index="index" collection="indexIDs" open="(" separator="," close=")">  
+	            #{indexId}  
+	  		</foreach>
+		  </if>
+		  <if test="periodTypes != null">
+		  	and a.period_type in
+			<foreach item="periodType" index="index" collection="periodTypes" open="(" separator="," close=")">  
+	            #{periodType}  
+	  		</foreach>
+		  </if>
+	</select>
+	
+	<!-- 删除产品指数指标周期统计历史表 -->
+    <delete id="delProductIndexPeriodStatisticsHistory" parameterType="map">
+		delete from t_product_index_period_statistics_history
+		where 1=1
+		<if test="request != null">
+			<if test="request.beginDate  != null and request.beginDate != ''">
+				and date &gt;= #{request.beginDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="request.endDate  != null and request.endDate != ''">
+				and date &lt;= #{request.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="request.statDate  != null and request.statDate != ''">
+				and stat_date = #{request.statDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="request.productId  != null and request.productId != ''">
+				and product_id = #{request.productId ,jdbcType=VARCHAR}
+			</if>
+			<if test="request.kpiType != 0">
+				AND kpi IN 
+					  (SELECT 
+					    a.KPI 
+					  FROM
+					    t_kpi_dictionary a 
+					  WHERE a.type = #{request.kpiType,jdbcType=VARCHAR})
+			</if>
+			<if test="request.kpiCodes != null ">
+				and kpi in
+				<foreach item="kpiCode" index="index" collection="request.kpiCodes" open="(" separator="," close=")">  
+		            #{kpiCode}  
+		  		</foreach>
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 删除产品指数指标周期统计最新记录表 -->
+    <delete id="delProductIndexPeriodStatistics" parameterType="map">
+		delete from t_product_index_period_statistics
+		where 1=1
+		<if test="request != null">
+			<if test="request.productId  != null and request.productId != ''">
+				and product_id = #{request.productId ,jdbcType=VARCHAR}
+			</if>
+			<if test="request.kpiType != 0">
+				AND kpi IN 
+					  (SELECT 
+					    a.KPI 
+					  FROM
+					    t_kpi_dictionary a 
+					  WHERE a.type = #{request.kpiType,jdbcType=VARCHAR})
+			</if>
+			<if test="request.kpiCodes != null ">
+				and kpi in
+				<foreach item="kpiCode" index="index" collection="request.kpiCodes" open="(" separator="," close=")">  
+		            #{kpiCode}  
+		  		</foreach>
+			</if>
+			<if test="request.beginDate != null ">
+				and product_id in(select product_id from t_product_net_value where date &gt;#{request.beginDate,jdbcType=VARCHAR} group by product_id)
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 获取beta值指标 -->
+	<select id="getBetaList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndexPeriodStatisticsHistory">
+		SELECT 
+		  a.date,
+		  a.index_id indexID,
+		  a.period_type periodType,
+		  a.product_id productID,
+		  a.value 
+		FROM
+		  t_product_index_period_statistics_history a 
+		WHERE a.stat_date = 
+		  (SELECT 
+		    stat_date
+		  FROM
+		    t_product_index_period_statistics_history 
+		  WHERE product_id = #{productID,jdbcType=VARCHAR} and kpi=#{KPI,jdbcType=VARCHAR}
+		  ORDER BY stat_date DESC LIMIT 1
+		  )
+		  <if test="productID != null and productID != ''">
+		  	and a.product_id =#{productID,jdbcType=VARCHAR}
+		  </if>
+		  
+		  <if test="KPI != null and KPI != ''">
+		  	and a.kpi =#{KPI,jdbcType=VARCHAR}
+		  </if>
+		  
+		  <if test="startDate != null and startDate != ''">
+		  	and a.date &gt;=#{startDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test="endDate != null and endDate != ''">
+		  	and a.date &lt;=#{endDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test="indexIDs != null">
+		  	and a.index_id in
+			<foreach item="indexId" index="index" collection="indexIDs" open="(" separator="," close=")">  
+	            #{indexId}  
+	  		</foreach>
+		  </if>
+		  <if test="periodTypes != null">
+		  	and a.period_type in
+			<foreach item="periodType" index="index" collection="periodTypes" open="(" separator="," close=")">  
+	            #{periodType}  
+	  		</foreach>
+		  </if>
+	</select>
+</mapper>

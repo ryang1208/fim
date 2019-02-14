@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisInvesterFundMapper">
+	<!-- 取得资金表列表(多账户合并) -->
+	<select id="findInvesterFundList" parameterType="map" resultType="com.quantdo.iwin.response.SourceListResponse">
+			SELECT 
+			    pr.product_id productID,
+			    pc.date,
+			    SUM(IFNULL(pc.margin_occupied,0)) numerator,
+			    SUM(IFNULL(pc.invester_equity,0)) denominator
+			FROM
+			  t_invester_fund pc
+			LEFT JOIN 
+			  t_product_invester_relationship pr ON pc.invester_ID = pr.invester_ID  AND pc.broker_ID = pr.broker_ID AND pr.invester_type = 1 
+			WHERE pr.product_id IS NOT NULL
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				AND pr.product_ID = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+			<if test="analysisProductPeriod.endDate != null and analysisProductPeriod.endDate != ''">
+				AND pc.date &lt;= #{analysisProductPeriod.endDate,jdbcType=VARCHAR} 
+			</if>
+			<if test="analysisProductPeriod.startDate != null and analysisProductPeriod.startDate != ''">
+				AND pc.date >= #{analysisProductPeriod.startDate,jdbcType=VARCHAR}
+			</if>
+			GROUP BY pr.product_id,pc.date 
+	</select>
+
+	<!-- 仓位 -->
+	<select id="findPositionList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		<if test="analysisProductPeriod != null">
+			SELECT base.date,rel.product_id productID,#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+				#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+				DATE_FORMAT( current_date(), '%Y%m%d') statDate,
+				null today,
+				null oneMonth,
+				null threeMonth,
+				null sixMonth,
+				null oneYear,
+				format(base.margin_occupied/base.invester_equity,8) untilNow,
+				null thisYear
+			from t_invester_fund base 
+			LEFT JOIN t_product_invester_relationship rel ON base.invester_id = rel.invester_id and base.broker_id = rel.broker_id and rel.invester_type = '1'
+			where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and rel.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+		</if>
+	
+	</select>
+	
+	<!-- 五日均仓位 -->
+	<select id="findFiveDaysAveragePositionList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		<if test="analysisProductPeriod != null">
+			SELECT base.date,rel.product_id productID,#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+				#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+				DATE_FORMAT( current_date(), '%Y%m%d') statDate,
+				null today,
+				null oneMonth,
+				null threeMonth,
+				null sixMonth,
+				null oneYear,
+				untilNow.fiveDaysAvgPosition untilNow,
+				null thisYear
+			from t_invester_fund base 
+			LEFT JOIN t_product_invester_relationship rel ON base.invester_id = rel.invester_id and base.broker_id = rel.broker_id and rel.invester_type = '1'
+			left join (select format(sum(until_now)/count(until_now),8) fiveDaysAvgPosition,product_id from (
+				select base.date,base.until_now,base.product_id from (
+					select stat.date,stat.until_now,stat.product_id,count(*) rank
+									from t_product_period_kpi_statistics stat
+						join (select product_id ,date,until_now 
+								from t_product_period_kpi_statistics 
+								where date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} and KPI = '020044') base on stat.date &gt;= base.date and stat.product_id = base.product_id 
+										where stat.date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} and stat.KPI = '020044' 
+					group by stat.product_id ,stat.date desc ,stat.until_now)base
+				left join 
+				(select product_id,max(rank) max_rank from (select stat.date,stat.until_now,stat.product_id,count(stat.product_id) rank
+								from t_product_period_kpi_statistics stat
+					where stat.KPI = '020044' and stat.date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+					group by stat.product_id )Y group by product_id) maxList on base.product_id = maxList.product_id
+				where maxList.max_rank-base.rank &lt; 5
+				)X
+			group by product_id) untilNow on untilNow.product_id = rel.product_id
+			where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and rel.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+		</if>
+		
+	</select>
+
+	<!-- 风险度均值 -->
+	<select id="findAverageRiskList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		<if test="analysisProductPeriod != null">
+			SELECT base.date,rel.product_id productID,#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+				#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,DATE_FORMAT( current_date(), '%Y%m%d') statDate,
+				null today,
+				null oneMonth,
+				null threeMonth,
+				null sixMonth,
+				null oneYear,
+				untilNow.averageRiskDegree untilNow,
+				null thisYear
+			from t_invester_fund base 
+			LEFT JOIN t_product_invester_relationship rel ON base.invester_id = rel.invester_id and base.broker_id = rel.broker_id and rel.invester_type = '1'
+			left join (select sum(untilNow.risk_degree)/count(untilNow.risk_degree) averageRiskDegree,re.product_id 
+				from t_invester_fund untilNow 
+				LEFT JOIN t_product_invester_relationship re ON untilNow.invester_id = re.invester_id and untilNow.broker_id = re.broker_id and re.invester_type = '1'
+				where date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+				group by re.product_id) untilNow on untilNow.product_id = rel.product_id
+			where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and rel.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+		</if>
+	
+	</select>
+</mapper>

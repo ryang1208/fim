@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ParentBasicMapper">
+
+	<!-- 母子基金信息 -->
+	<select id="getBasicInfo" parameterType="map" resultType="com.quantdo.iwin.response.ParentBasicInfoResponse">
+		SELECT 
+		  a.id productId,
+		  a.product_name productName,
+		  a.strategy_list strategyList,
+		  a.initial_asset initialAsset,
+		            case when  #{parentInitialAsset,jdbcType=VARCHAR} is null 
+              then 100 
+          else
+              ROUND(a.initial_asset / #{parentInitialAsset,jdbcType=DECIMAL} * 100, 4)
+		  END initialAssetRatio,
+		  a.fund_trustee fundTrustee,
+		  a.fund_manager fundManager,
+		  netValue.net_accumulative_value netAccumulativeValue,
+		  ROUND(yearRatio.until_now*100,4) yearRatio, 
+		  ROUND(drawdown.until_now*100,4) maxDrawdown,
+		  ROUND(daily.risk_return_ratio,4) riskReturnRatio,
+		  a.create_date createDate
+		FROM
+		  t_product a 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.net_accumulative_value,
+		      temp.product_id 
+		    FROM
+		      (SELECT 
+		        net_accumulative_value,
+		        product_id 
+		      FROM
+		        t_product_net_value 
+		      GROUP BY DATE DESC,
+		        product_id) temp 
+		    GROUP BY product_id) netValue 
+		    ON a.id = netValue.product_id 
+		  LEFT JOIN 
+		    (SELECT product_id,
+			VALUE until_now 
+                FROM t_product_period_statistics a 
+                WHERE KPI = '030002' 
+			AND period_type = 0
+			AND product_id IN  
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    ) yearRatio 
+		    ON a.id = yearRatio.product_id 
+		  LEFT JOIN 
+		    (SELECT product_id,
+			VALUE until_now 
+                FROM t_product_period_statistics a 
+                WHERE KPI = '040006' 
+			AND period_type = 0
+			AND product_id IN  
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    ) drawdown 
+		    ON a.id = drawdown.product_id 
+		    LEFT JOIN 
+		    (SELECT product_id,
+			VALUE risk_return_ratio 
+                FROM t_product_period_statistics a 
+                WHERE KPI = '040009' 
+			AND period_type = 0
+			AND product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+                ) daily 
+		    ON a.id = daily.product_id 
+		WHERE a.id IN
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+	</select>	
+	
+
+	<!-- 母子基金累计净值时序图 -->
+	<select id="getNetAccumulativeValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductNetValue">
+		SELECT 
+		  a.product_id productId,
+		  a.date DATE,
+		  a.net_accumulative_value netAccumulativeValue ,
+		  p.product_name productName
+		FROM
+		  t_product_net_value a 
+		left join t_product p
+		on a.product_id = p.id
+		WHERE a.product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="beginDate != null and beginDate != ''">
+		 		AND a.date &gt;= #{beginDate,jdbcType=VARCHAR}  
+		  	</if>
+		  	<if test="endDate != null and endDate != ''">
+			 	AND a.date &lt;=#{endDate,jdbcType=VARCHAR} 
+		  	</if>
+		  	order by a.date asc
+	</select>	
+	
+	<!-- 获取母子基金累计净值时间区间 -->
+	<select id="getDateList" parameterType="map" resultType="java.lang.String">
+		SELECT 
+		  a.date
+		FROM
+		  t_product_net_value a 
+		WHERE a.product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="beginDate != null and beginDate != ''">
+		 		AND a.date &gt;= #{beginDate,jdbcType=VARCHAR}  
+		  	</if>
+		  	<if test="endDate != null and endDate != ''">
+			 	AND a.date &lt;=#{endDate,jdbcType=VARCHAR} 
+		  	</if>
+		  GROUP BY a.date 
+	</select>
+	
+	<select id="getProductList" parameterType="map" resultType="com.quantdo.iwin.entity.iWinProduct">
+		select id ,product_name productName from t_product 
+		WHERE id in (select product_id from t_products_relationship WHERE parent_product_id=#{parentProductId,jdbcType=VARCHAR})
+		order by id desc
+	</select>
+	
+	<!-- 获取母子基金AlphaBeta值时间区间 -->
+	<select id="getAlphaBetaDateList" parameterType="map" resultType="java.lang.String">
+		SELECT 
+		  a.date
+		FROM
+		 t_product_index_period_kpi_statistics a 
+		WHERE a.product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="beginDate != null and beginDate != ''">
+		 		AND a.date &gt;= #{beginDate,jdbcType=VARCHAR}  
+		  	</if>
+		  	<if test="endDate != null and endDate != ''">
+			 	AND a.date &lt;=#{endDate,jdbcType=VARCHAR} 
+		  	</if>
+		  	<if test="kpiCode != null and kpiCode != ''">
+			 	AND a.KPI =#{kpiCode,jdbcType=VARCHAR} 
+		  	</if>
+		  	AND a.period_type = #{periodType,jdbcType=VARCHAR} 
+		  	AND a.index_id = #{indexID,jdbcType=VARCHAR} 
+		  GROUP BY a.date 
+	</select>
+	
+	<!-- 母子基金alphaBeta值-->
+	<select id="getAlphaBetaValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndexPeriodKPIStatistics">
+		SELECT 
+		  a.product_id productId,
+		  a.date date,
+		  a.value value ,
+		  p.product_name productName
+		FROM
+		  t_product_index_period_kpi_statistics a 
+		left join t_product p
+		on a.product_id = p.id
+		WHERE a.product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="beginDate != null and beginDate != ''">
+		 		AND a.date &gt;= #{beginDate,jdbcType=VARCHAR}  
+		  	</if>
+		  	<if test="endDate != null and endDate != ''">
+			 	AND a.date &lt;=#{endDate,jdbcType=VARCHAR} 
+		  	</if>
+		  	<if test="kpiCode != null and kpiCode != ''">
+			 	AND a.KPI =#{kpiCode,jdbcType=VARCHAR} 
+		  	</if>
+		  	AND a.period_type = #{periodType,jdbcType=VARCHAR} 
+		  	AND a.index_id = #{indexID,jdbcType=VARCHAR} 
+		  	order by a.date asc
+	</select>
+	
+	<select id="getProductListByIds" parameterType="map" resultType="com.quantdo.iwin.entity.iWinProduct">
+		select id ,product_name productName from t_product 
+		WHERE id in 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+	            #{id}
+		    </foreach>
+		order by id desc
+	</select>
+</mapper>

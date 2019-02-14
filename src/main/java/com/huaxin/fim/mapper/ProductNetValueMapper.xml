@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductNetValueMapper">
+
+  <!-- 计算产品的单位净值（大赛算法） -->
+  <select id="calculateProductNetValueForCompetition" parameterType="map" resultType="com.quantdo.iwin.entity.ProductNetValue">
+	   SELECT 
+		  tif.date DATE,
+		  tp.product_id productID,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN SUM(IFNULL(tif.tot_profit, 0)) - SUM(IFNULL(tif.commission_toady, 0)) > 0 
+		        THEN (
+		          SUM(tif.invester_equity) + ABS(IFNULL(inOutMoney.outMoney, 0))
+		        ) / (
+		          lastDayEquity.investerEquity + IFNULL(inOutMoney.incomeMoney, 0)
+		        ) 
+		        WHEN SUM(IFNULL(tif.tot_profit, 0)) - SUM(IFNULL(tif.commission_toady, 0)) &lt; 0 
+		        THEN (
+		          SUM(tif.invester_equity) - IFNULL(inOutMoney.incomeMoney, 0) + ABS(IFNULL(inOutMoney.outMoney, 0))
+		        ) / lastDayEquity.investerEquity
+		        ELSE 1 
+		      END
+		    ),
+		    6
+		  ) netAssetValue,
+		  NULL netAccumulativeValue,
+		  NULL totalShare,
+		  NULL assetValue,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate,
+		  8 dataSource 
+		FROM
+		  t_invester_fund tif 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id,
+		      product_id 
+		    FROM
+		      t_product_invester_relationship a 
+		    WHERE a.product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}) tp 
+		    ON 1=1 
+		  LEFT JOIN 
+		    (SELECT 
+		      t.date DATE,
+		      t.invester_id investerId,
+		      t.broker_id brokerId,
+		      SUM(IFNULL(t.invester_equity, 0)) investerEquity 
+		    FROM
+		      t_invester_fund t 
+		    WHERE t.date = #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR}  
+		      AND t.invester_id IN 
+		      (SELECT 
+		        invester_id 
+		      FROM
+		        t_product_invester_relationship 
+		      WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR})) lastDayEquity 
+		    ON 1 = 1 
+		  LEFT JOIN 
+		    (SELECT 
+		      t.invester_id investerId,
+		      t.broker_id brokerId,
+		      t.date DATE,
+		      SUM(
+		        CASE
+		          WHEN t.type_deposit_withdrawal = '1' 
+		          THEN IFNULL(t.deposit, 0) 
+		          ELSE 0 
+		        END
+		      ) incomeMoney,
+		      SUM(
+		        CASE
+		          WHEN t.type_deposit_withdrawal = '2' 
+		          THEN IFNULL(t.withdrawal, 0) 
+		          ELSE 0 
+		        END
+		      ) outMoney 
+		    FROM
+		      t_invester_deposit_withdrawal t 
+		    WHERE t.date = #{kpiCalculationRequest.statDate,jdbcType=VARCHAR} 
+		      AND t.invester_id IN 
+		      (SELECT 
+		        invester_id 
+		      FROM
+		        t_product_invester_relationship 
+		      WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR})) inOutMoney 
+		    ON 1 = 1 
+		WHERE 
+    		tif.invester_id IN (tp.invester_id) 
+		    AND tif.broker_id IN (tp.broker_id) 
+		    and tif.date = #{kpiCalculationRequest.statDate,jdbcType=VARCHAR} 
+		  	AND tp.product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		GROUP BY tp.product_id 
+  </select>
+  
+  <!-- 删除产品净值表 -->
+  <delete id="deleteProductNetValue" parameterType="map">
+		delete from t_product_net_value 
+		where 1=1
+		<if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+				and date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+				and date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 获取需要更新累计净值的产品列表 -->
+	<select id="getProductList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductNetValue">
+		SELECT 
+		  distinct(t.product_id) productID
+		FROM
+		  t_product_net_value t 
+		where t.net_accumulative_value is null
+		<if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+				and date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+				and date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</select>
+	
+	<!-- 获取最新一条产品净值数据 -->
+	<select id="getLastNetAccumuValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductNetValue">
+		SELECT 
+		  temp.productID productID,
+		  temp.date DATE,
+		  temp.dataSource dataSource,
+		  temp.netAssetValue netAssetValue,
+		  temp.netAccumulativeValue netAccumulativeValue,
+		  temp.assetValue assetValue,
+		  temp.totalShare totalShare 
+		FROM
+		  (SELECT 
+		    t.product_id productID,
+		    t.date DATE,
+		    t.data_source dataSource,
+		    t.net_asset_value netAssetValue,
+		    t.net_accumulative_value netAccumulativeValue,
+		    t.asset_value assetValue,
+		    t.total_share totalShare 
+		  FROM
+		    t_product_net_value t 
+		  WHERE t.net_accumulative_value IS NOT NULL 
+		    <if test="kpiCalculationRequest != null">
+				<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+					and date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+				</if>
+				<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+					and date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+				</if>
+				<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+					and product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+				</if>
+			</if>
+		  GROUP BY t.product_id,
+		    t.date DESC) temp 
+		GROUP BY temp.productID
+	</select>
+	
+	<!-- 获取产品需要更新累计净值的数据列表 -->
+	<select id="getCalculateNetAccumuValueList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductNetValue">
+		SELECT 
+		  t.id id,
+		  t.product_id productID,
+		  t.date DATE,
+		  t.data_source dataSource,
+		  t.net_asset_value netAssetValue,
+		  t.net_accumulative_value netAccumulativeValue,
+		  t.asset_value assetValue,
+		  t.total_share totalShare,
+		  t.update_date updateDate
+		FROM
+		  t_product_net_value t 
+		WHERE  t.net_accumulative_value IS NULL 
+		  <if test="kpiCalculationRequest != null">
+				<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+					and date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+				</if>
+				<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+					and date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+				</if>
+				<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+					and product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+				</if>
+			</if>
+		ORDER BY t.date 
+	</select>
+	
+	
+	<!-- start 查询基金历史净值 add by lihj -->
+
+    <resultMap id="ProductNetValueMap" type="com.quantdo.iwin.entity.ProductNetValue">
+        <result property="productID" column="product_id" />
+        <result property="date" column="date" />
+        <result property="netAssetValue" column="net_asset_value" />
+        <result property="netAccumulativeValue" column="net_accumulative_value" />
+        <result property="sourceName" column="data_source" />
+    </resultMap>
+
+    <select id="getProductNetValueByProductId" parameterType="map" resultMap="ProductNetValueMap">
+        select product_id,date,net_asset_value,net_accumulative_value,(select data_describe from t_iwin_data_dictionary
+        where data_type='TypeDataSource' and data_value=data_source) as data_source from
+        t_product_net_value
+        <where>
+            product_id=#{productId,jdbcType=INTEGER}
+        </where>
+        order by date desc
+        limit #{pageSize,jdbcType=INTEGER}
+    </select>
+
+	<!-- end 查询基金历史净值 add by lihj -->
+	<!-- 获取非计算净值的最小日期 -->
+	<select id="getNetValueMinDate" parameterType="String" resultType="String">
+	 	SELECT MIN(t.date)FROM t_product_net_value t WHERE t.`data_source` &lt;&gt;6 
+	</select>
+	
+	<!-- 获取资金表中最下日期 -->
+	<select id="getInvesterFundMinDate" parameterType="String" resultType="String">
+	 	SELECT MIN(t.`date`) FROM t_invester_fund t
+	</select>
+	
+	<!-- 获取产品的最大净值日期 -->
+	<select id="getNetValueMaxDateByProductId" parameterType="String" resultType="String">
+	 	SELECT MAX(t.date)FROM t_product_net_value t WHERE t.`data_source` &lt;&gt;6 and t.product_id=#{productId,jdbcType=VARCHAR}
+	</select>
+	
+	<!-- 获取产品结算单的最小日期 -->
+	<select id="getInvesterFundMinDateByProductId" parameterType="String" resultType="String">
+	 	SELECT 
+		  MIN(t.date) 
+		FROM
+		  t_invester_fund t 
+		WHERE t.data_source  &lt;&gt;6  
+		  AND t.invester_id in 
+		  (SELECT 
+		    invester_id 
+		  FROM
+		    t_product_invester_relationship tp 
+		  WHERE tp.product_id = #{productId,jdbcType=VARCHAR})
+	</select>
+	<!-- 获取产品结算单的最大日期 -->
+	<select id="getInvesterFundMaxDateByProductId" parameterType="map" resultType="String">
+	 	SELECT 
+		  MAX(t.date) 
+		FROM
+		  t_invester_fund t 
+		WHERE t.data_source  &lt;&gt;6  
+		  and t.date &lt; #{date,jdbcType=VARCHAR}
+		  AND t.invester_id in 
+		  (SELECT 
+		    invester_id 
+		  FROM
+		    t_product_invester_relationship tp 
+		  WHERE tp.product_id = #{productId,jdbcType=VARCHAR})
+	</select>
+	
+	<!-- 获取产品的最大净值日期 -->
+	<select id="getMaxDateFromNetValue" parameterType="String" resultType="String">
+	 	SELECT MAX(t.date)FROM t_product_net_value t WHERE t.product_id=#{productId,jdbcType=VARCHAR}
+	</select>
+
+	<!-- 获取产品的最大结算单日期 -->
+	<select id="getMaxDateFromFundInvester" parameterType="String" resultType="String">
+	 	SELECT MAX(t.date)
+	 	FROM t_invester_fund t 
+	 	WHERE t.invester_id in 
+		  (SELECT 
+		    invester_id 
+		  FROM
+		    t_product_invester_relationship tp 
+		  WHERE tp.product_id = #{productId,jdbcType=VARCHAR})
+	</select>
+	
+	<!-- 获取产品资金信息（计算净值使用） -->
+  	<select id="getInvesterFundListForNetValue" parameterType="map" resultType="com.quantdo.iwin.entity.InvesterFund">
+  		SELECT 
+		  t.date,
+		  SUM(t.invester_equity) investerEquity,
+		  SUM(t.balance_today) balanceToday,
+		  SUM(IFNULL(t.deposit_withdraw_today,0)) depositWithdrawToday,
+		  SUM(IFNULL(inoutMoney.deposit,0)) deposit,
+		  SUM(IFNULL(inoutMoney.withdrawal,0)) withdrawal,
+		  SUM(IFNULL(t.commission_toady,0)) commissionToady,
+  		  SUM(CASE WHEN t.tot_profit IS NULL THEN IFNULL(t.close_profit,0) ELSE t.tot_profit END) profit
+		FROM
+		  t_invester_fund t 
+		  LEFT JOIN 
+		    (SELECT 
+		      DATE,
+		      SUM(deposit) deposit,
+		      SUM(withdrawal) withdrawal,
+		      invester_id investerID 
+		    FROM
+		      t_invester_deposit_withdrawal 
+		    WHERE invester_id IN 
+		      (SELECT 
+		        invester_id 
+		      FROM
+		        t_product_invester_relationship 
+		      WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} AND invester_type='1' ) 
+		    GROUP BY DATE) inoutMoney 
+		    ON inoutMoney.investerID = t.invester_id AND t.date = inoutMoney.date
+		WHERE t.invester_id in
+		  (SELECT 
+		    invester_id 
+		  FROM
+		    t_product_invester_relationship 
+		  WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} AND invester_type='1') 
+		  AND t.date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR} 
+		  AND t.date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR} 
+		  AND t.invester_equity &lt;&gt; 0
+		  and t.data_source &lt;&gt; '9' 
+		GROUP BY t.DATE 
+	</select>
+	
+	<!-- 获取产品资金信息（计算净值使用） -->
+  	<select id="getInOutMoneyListForNetValue" parameterType="map" resultType="com.quantdo.iwin.entity.InvesterDepositWithdrawal">
+  		SELECT 
+		  a.invester_id,
+		  a.date,
+		  a.deposit,
+		  a.type_deposit_withdrawal typeDepositWithdrawal,
+		  a.withdrawal 
+		FROM
+		  t_invester_deposit_withdrawal a 
+		WHERE a.invester_id in 
+		  (SELECT 
+		    invester_id 
+		  FROM
+		    t_product_invester_relationship 
+		  WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}) 
+		  AND a.date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR} 
+		ORDER BY a.DATE 
+  	</select>
+  	
+  	<!-- 获取产品结算单的最大日期 -->
+	<select id="getNetValueMinDateByProductId" parameterType="map" resultType="String">
+		SELECT DATE 
+		FROM t_product_net_value 
+		WHERE product_id IN (SELECT product_id FROM t_products_relationship WHERE parent_product_id = #{productId,jdbcType=VARCHAR}) 
+		AND DATE &gt;= (SELECT start_date FROM t_products_relationship WHERE parent_product_id = #{productId,jdbcType=VARCHAR} ORDER BY start_date LIMIT 1)
+		ORDER BY DATE 
+		LIMIT 1 
+	</select>
+	
+	<!-- 获取母基金下子基金净值列表 -->
+	<select id="getProductsNetValueList" parameterType="map" resultType="com.quantdo.iwin.response.ProductsNetValueResponse">
+		SELECT nv.date,
+			nv.product_id productId,
+			nv.net_asset_value netAssetValue,
+			nv.net_accumulative_value netAcumulativeValue,
+			(SELECT is_calculate_netValue FROM t_product p WHERE p.id = nv.product_id) isCalculateNetValue
+		FROM t_product_net_value nv
+		WHERE nv.product_id IN (SELECT product_id FROM t_products_relationship WHERE parent_product_id = #{productId,jdbcType=VARCHAR})
+			AND nv.date &gt;= #{date,jdbcType=VARCHAR}
+		ORDER BY nv.date
+	</select>
+	
+	<!-- 获取母基金下子基金净值列表 -->
+	<select id="getProductsNetValueListByDate" parameterType="map" resultType="com.quantdo.iwin.response.ProductsNetValueResponse">
+		SELECT  nv.date,
+			re.product_id productId,
+			nv.net_asset_value netAssetValue,
+			nv.net_accumulative_value netAcumulativeValue,
+			re.product_ratio ratio,
+			(SELECT is_calculate_netValue FROM t_product p WHERE p.id = re.product_id) isCalculateNetValue
+		FROM t_products_relationship re
+		LEFT JOIN (SELECT date,product_id,net_asset_value,net_accumulative_value 
+			FROM t_product_net_value 
+			WHERE product_id IN (SELECT product_id FROM t_products_relationship WHERE parent_product_id = #{productId,jdbcType=VARCHAR}) AND DATE = #{date,jdbcType=VARCHAR}) nv ON re.product_id = nv.product_id
+		WHERE parent_product_id = #{productId,jdbcType=VARCHAR}
+		AND start_date &lt;= #{date,jdbcType=VARCHAR}
+	</select>
+</mapper>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.BondStyleAnalysisStatisticsMapper">
+
+	<!-- 久期变化图表 -->
+	<select id="getBondDurationList" parameterType="map" resultType="com.quantdo.iwin.response.CategoryResponse">
+		<if test="styleAnalysisRequest != null">
+			SELECT	t.date,
+				FORMAT(t.today,2) firstCategory
+				FROM
+				t_product_period_kpi_statistics t 
+				WHERE t.KPI = #{styleAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+			  	 <if test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate !=''">
+		          	and	t.date &gt;= #{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate !=''">
+		          	and	t.date &lt;= #{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+	          	 <if test="styleAnalysisRequest.productId != null and styleAnalysisRequest.productId !=''">
+		          	and	t.product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+	          	 </if>
+	         order by t.date
+		  </if>
+  </select>
+  
+  <!-- 凸性变化图表 -->
+	<select id="getBondConvexityList" parameterType="map" resultType="com.quantdo.iwin.response.CategoryResponse">
+		<if test="styleAnalysisRequest != null">
+			SELECT	t.date,
+				FORMAT(t.today,2) firstCategory
+				FROM
+				t_product_period_kpi_statistics t 
+				WHERE t.KPI = #{styleAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+			  	 <if test="styleAnalysisRequest.beginDate != null and styleAnalysisRequest.beginDate !=''">
+		          	and	t.date &gt;= #{styleAnalysisRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="styleAnalysisRequest.endDate != null and styleAnalysisRequest.endDate !=''">
+		          	and	t.date &lt;= #{styleAnalysisRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+	          	 <if test="styleAnalysisRequest.productId != null and styleAnalysisRequest.productId !=''">
+		          	and	t.product_id = #{styleAnalysisRequest.productId,jdbcType=VARCHAR}
+	          	 </if>
+	         order by t.date
+		  </if>
+  </select>
+	
+</mapper>

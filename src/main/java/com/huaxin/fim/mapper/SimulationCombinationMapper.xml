@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.SimulationCombinationMapper">
+
+	<!-- 模拟组合构建成分基金明细数据列表 -->
+	<select id="getSelectedProductList" parameterType="map" resultType="com.quantdo.iwin.response.ParentBasicInfoResponse">
+		SELECT 
+		  a.id productId,
+		  a.product_name productName,
+		  a.strategy_list strategyList,
+		  a.initial_asset initialAsset,
+		  a.fund_trustee fundTrustee,
+		  a.fund_manager fundManager,
+		  ROUND(
+		    netValue.net_accumulative_value,
+		    4
+		  ) netAccumulativeValue,
+		  ROUND(yieldRatio.value * 100, 4) yieldRatio,
+		  ROUND(abs(drawdown.value) * 100, 4) maxDrawdown,
+		  ROUND(sharpTemp.value, 4) sharpRatio,
+		  a.product_status productStatus,
+		  a.create_date createDate,
+		  a.is_parent_product isParentProduct,
+		  a.product_type productType,
+		  periodTemp.period period 
+		FROM
+		  t_product a 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.net_accumulative_value,
+		      temp.product_id 
+		    FROM
+		      (SELECT 
+		        net_accumulative_value,
+		        product_id 
+		      FROM
+		        t_product_net_value 
+		      WHERE product_id IN 
+		        (SELECT 
+		          product_id 
+		        FROM
+		          t_user_selected_product 
+		        WHERE user_id = #{userId,jdbcType=VARCHAR}) 
+		      GROUP BY DATE DESC,
+		        product_id) temp 
+		    GROUP BY product_id) netValue 
+		    ON a.id = netValue.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      product_id,
+		      VALUE 
+		    FROM
+		      t_product_period_statistics 
+		    WHERE period_type = '0' 
+		      AND kpi = '020032' 
+		      AND product_id IN 
+		      (SELECT 
+		        product_id 
+		      FROM
+		        t_user_selected_product 
+		      WHERE user_id = #{userId,jdbcType=VARCHAR})) yieldRatio 
+		    ON a.id = yieldRatio.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      product_id,
+		      VALUE 
+		    FROM
+		      t_product_period_statistics 
+		    WHERE product_id IN 
+		      (SELECT 
+		        product_id 
+		      FROM
+		        t_user_selected_product 
+		      WHERE user_id = #{userId,jdbcType=VARCHAR}) 
+		      AND kpi = '030007' 
+		      AND period_type = '0') sharpTemp 
+		    ON a.id = sharpTemp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      product_id,
+		      VALUE 
+		    FROM
+		      t_product_period_statistics 
+		    WHERE period_type = '0' 
+		      AND kpi = '040006' 
+		      AND product_id IN 
+		      (SELECT 
+		        product_id 
+		      FROM
+		        t_user_selected_product 
+		      WHERE user_id = #{userId,jdbcType=VARCHAR})) drawdown 
+		    ON a.id = drawdown.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      CONCAT(MIN(DATE), '至', MAX(DATE)) period,
+		      product_id 
+		    FROM
+		      t_product_net_value 
+		    WHERE product_id IN 
+		      (SELECT 
+		        product_id 
+		      FROM
+		        t_user_selected_product 
+		      WHERE user_id = #{userId,jdbcType=VARCHAR}) 
+		    GROUP BY product_id) periodTemp 
+		    ON periodTemp.product_id = a.id 
+		WHERE a.id IN 
+		  (SELECT 
+		    product_id 
+		  FROM
+		    t_user_selected_product 
+		  WHERE user_id = #{userId,jdbcType=VARCHAR})
+	</select>	
+	
+	<!-- 获取模拟组合产品存续期（最长） -->
+	<select id="getMaxDurationList" parameterType="map" resultType="com.quantdo.iwin.response.DurationResponse">
+		SELECT 
+		  MIN(a.date) minDate,
+		  MAX(a.date) maxDate
+		FROM
+		  t_product_net_value a 
+		WHERE a.product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="beginDate != null and beginDate !=''">
+			 	AND a.date &gt;= #{beginDate,jdbcType=VARCHAR}  
+		    </if>
+	</select>
+	
+	<!-- 获取模拟组合产品存续期（共有） -->
+	<select id="getCommonDurationList" parameterType="map" resultType="com.quantdo.iwin.response.DurationResponse">
+		SELECT 
+		  date minDate
+		FROM
+		  t_product_net_value 
+		WHERE 
+			product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="minDate != null and minDate !=''">
+				and DATE &gt;= #{minDate,jdbcType=VARCHAR} 
+		    </if>
+		    <if test="maxDate != null and maxDate !=''">
+			 	AND DATE &lt;= #{maxDate,jdbcType=VARCHAR}  
+		    </if>
+		GROUP BY DATE 
+		HAVING COUNT(product_id) =#{totalNum,jdbcType=INTEGER}  
+		ORDER BY DATE 
+	</select>
+	
+	<!-- 获取交易日 -->
+	<select id="getTradeDays" parameterType="map" resultType="String">
+		SELECT 
+			COUNT(temp.date) 
+		FROM (
+			select 
+			  date 
+			from
+			  t_product_net_value 
+			where 
+				product_id IN 
+				<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+			            #{id}
+			    </foreach>
+			    <if test="minDate != null and minDate !=''">
+					and DATE &gt;= #{minDate,jdbcType=VARCHAR} 
+			    </if>
+			    <if test="maxDate != null and maxDate !=''">
+				 	AND DATE &lt;= #{maxDate,jdbcType=VARCHAR}  
+			    </if>
+			group by date)temp 
+	</select>
+	<!-- 获取组合基金存续期区间净值数据集 -->
+	<select id="getMemberFundNetValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductNetValue">
+		select 
+		  product_id productId,
+		  date date,
+		  net_asset_value netAssetValue,
+		  net_accumulative_value netAccumulativeValue 
+		from
+		  t_product_net_value 
+		where product_id in 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+	            #{id}
+		    </foreach>
+			AND DATE &gt;= #{beginDate,jdbcType=VARCHAR} 
+		 	AND DATE &lt;= #{endDate,jdbcType=VARCHAR} 
+		 order by date 
+	</select>
+	
+	<select id="getCommonProductValueList" parameterType="map" resultType="java.lang.Double">
+		SELECT 
+		  t.net_accumulative_value  
+		FROM
+		  t_product_net_value t 
+		WHERE t.product_id = #{productId,jdbcType=VARCHAR}
+		  AND t.date IN 
+		  	<foreach item="durationResponse" index="index" collection="durationResponseList" open="(" separator="," close=")">  
+	            #{durationResponse.minDate}
+		    </foreach>
+		   order by t.date
+	</select>
+	
+	<select id="getDratioStandardDeviatio" parameterType="map" resultType="java.math.BigDecimal">
+		SELECT 
+			until_now 
+		FROM t_product_period_kpi_statistics
+		WHERE kpi='030023' AND product_id= #{productId,jdbcType=VARCHAR} 
+		ORDER BY DATE DESC
+		LIMIT 1
+	</select>
+	
+	<delete id="delSelectedProductByUser">
+		DELETE  FROM t_user_selected_product WHERE user_id=#{userId,jdbcType=VARCHAR}
+	</delete>
+	
+	<!-- 获取产品列表 -->
+	<select id="getProductNameListForBL"  parameterType="map" resultType="com.quantdo.iwin.entity.iWinProduct">
+		SELECT 
+		  p.id id,
+		  p.product_name productName,
+		  p.organization_id organizationId
+		FROM
+		  t_product p 
+	  where p.product_status &lt;&gt;'3'
+	  and id  IN(SELECT product_id FROM t_user_selected_product WHERE user_id=#{userId,jdbcType=VARCHAR})
+	</select>
+</mapper>

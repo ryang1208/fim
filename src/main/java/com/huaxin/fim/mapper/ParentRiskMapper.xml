@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ParentRiskMapper">
+
+	<!-- 母子基金累计净值时序图 -->
+	<select id="getDrawDownList" parameterType="map" resultType="com.quantdo.iwin.response.ParentAnalysisResponse">
+		SELECT 
+		  a.product_id productId,
+		  a.date date,
+		  a.until_now data ,
+		  p.product_name productName
+		FROM
+		t_product_period_kpi_statistics a 
+		left join t_product p
+		on a.product_id = p.id
+		WHERE a.kpi='030033' 
+		and a.product_id IN 
+			<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="request.beginDate != null and request.beginDate != ''">
+		 		AND a.date &gt;= #{request.beginDate,jdbcType=VARCHAR}  
+		  	</if>
+		  	<if test="request.endDate != null and request.endDate != ''">
+			 	AND a.date &lt;=#{request.endDate,jdbcType=VARCHAR} 
+		  	</if>
+		  	order by a.date asc
+	</select>	
+	
+	<!-- 获取母子基金累计净值时间区间 -->
+	<select id="getDateList" parameterType="map" resultType="java.lang.String">
+		SELECT 
+		  a.date
+		FROM
+		  t_product_period_kpi_statistics a 
+		WHERE a.kpi='030033'
+		and a.product_id IN 
+			<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		    <if test="request.beginDate != null and request.beginDate != ''">
+		 		AND a.date &gt;= #{request.beginDate,jdbcType=VARCHAR}  
+		  	</if>
+		  	<if test="request.endDate != null and request.endDate != ''">
+			 	AND a.date &lt;=#{request.endDate,jdbcType=VARCHAR} 
+		  	</if>
+		  GROUP BY a.date 
+	</select>
+	<!-- 获取夏普比率x轴数据集 -->
+	<select id="getDataList" parameterType="map" resultType="com.quantdo.iwin.response.ParentRiskAnalysisResponse">
+		SELECT 
+		  XTemp.date DATE,
+		  XTemp.product_id productId,
+		  p.product_name productName,
+		  ROUND(XTemp.xData * 100, 4) xData,
+		  ROUND(YTemp.yData * 100, 4) yData,
+		  ROUND(ZTemp.zData, 4) zData 
+		FROM
+		  (SELECT 
+		    a.date,
+		    a.product_id,
+		    a.value xData 
+		  FROM
+		    t_product_period_statistics a 
+		  WHERE a.kpi = #{request.xkpi,jdbcType=VARCHAR} 
+		    AND a.product_id IN 
+				<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+		            #{id}
+		   		</foreach>
+		    AND a.period_type = #{request.periodType,jdbcType=VARCHAR}) XTemp 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.date DATE,
+		      a.value yData,
+		      a.product_id productId 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = #{request.ykpi,jdbcType=VARCHAR} 
+		      AND a.product_id IN
+				<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+		            #{id}
+		   		</foreach>
+		      AND a.period_type = #{request.periodType,jdbcType=VARCHAR}) YTemp 
+		    ON YTemp.productId = XTemp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.date DATE,
+		      a.value zData,
+		      a.product_id productId 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = #{request.zkpi,jdbcType=VARCHAR} 
+		      AND a.product_id IN 
+				<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+		            #{id}
+		   		</foreach>
+		      AND a.period_type =#{request.periodType,jdbcType=VARCHAR}) ZTemp 
+		    ON ZTemp.productId = XTemp.product_id 
+		  LEFT JOIN t_product p 
+		    ON p.id = XTemp.product_id 
+		WHERE XTemp.xData IS NOT NULL 
+		  AND YTemp.yData IS NOT NULL 
+		  AND ZTemp.zData IS NOT NULL 
+	</select>
+	
+	<!-- 风险价值图表数据集 -->
+	<select id="getRiskValueList" parameterType="map" resultType="com.quantdo.iwin.response.ParentRiskAnalysisResponse">
+		SELECT 
+		  temp.productName productName,
+		  temp.productId,
+		  temp.today yData,
+		  temp.date
+		FROM
+		  (SELECT 
+		    t.product_name productName,
+		    a.product_id productId,
+		    a.today,
+		    a.date 
+		  FROM
+		    t_product_period_kpi_statistics a 
+		    LEFT JOIN t_product t 
+		      ON a.product_id = t.id 
+		  WHERE a.product_id IN 
+		    <foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+	            #{id}
+	   		</foreach>
+		    AND kpi = #{request.ykpi,jdbcType=VARCHAR}  
+		  GROUP BY a.product_id,
+		    a.date DESC) temp 
+		GROUP BY temp.productId 
+		ORDER BY temp.today DESC
+	</select>
+	
+	<!-- 获取索提诺和卡玛比例x轴数据集 -->
+	<select id="getDataListForSortinoAndCalmar" parameterType="map" resultType="com.quantdo.iwin.response.ParentRiskAnalysisResponse">
+		SELECT 
+		  XTemp.date DATE,
+		  XTemp.product_id productId,
+		  p.product_name productName,
+		  ROUND(XTemp.xData * 100, 4) xData,
+		  ROUND(YTemp.yData * 100, 4) yData,
+		  ROUND(ZTemp.zData, 4) zData 
+		FROM
+		  (SELECT 
+		    a.date,
+		    a.product_id,
+		    a.value xData 
+		  FROM
+		    t_product_period_statistics a 
+		  WHERE a.kpi = #{request.xkpi,jdbcType=VARCHAR} 
+		    AND a.product_id IN 
+				<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+		            #{id}
+		   		</foreach>
+		    AND a.period_type = #{request.periodType,jdbcType=VARCHAR}) XTemp 
+		  LEFT JOIN 
+		    (SELECT 
+			  temp.date date,
+			  temp.yData yData,
+			  temp.product_id productId
+			FROM
+			  (SELECT 
+			    a.date,
+			    a.product_id,
+			    <if test="request.periodType == 1 ">
+			    a.one_month 
+			    </if>
+			    <if test="request.periodType == 2 ">
+			    a.three_month 
+			    </if>
+			    <if test="request.periodType == 3 ">
+			    a.six_month
+			    </if>
+			    <if test="request.periodType == 4 ">
+			    a.one_year 
+			    </if>
+			    <if test="request.periodType == 0 ">
+			    a.until_now 
+			    </if>
+			    <if test="request.periodType == 5 ">
+			    a.this_year 
+			    </if> yData
+			  FROM
+			    t_product_period_kpi_statistics a 
+			  WHERE a.kpi = #{request.ykpi,jdbcType=VARCHAR}  
+			    AND a.product_id IN 
+			    <foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+			            #{id}
+			    </foreach>
+			  GROUP BY a.date DESC,
+			    a.product_id) temp 
+			GROUP BY temp.product_id )YTemp 
+			on YTemp.productId = XTemp.product_id
+		  LEFT JOIN 
+		    (SELECT 
+		      a.date DATE,
+		      a.value zData,
+		      a.product_id productId 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = #{request.zkpi,jdbcType=VARCHAR} 
+		      AND a.product_id IN 
+				<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+		            #{id}
+		   		</foreach>
+		      AND a.period_type =#{request.periodType,jdbcType=VARCHAR}) ZTemp 
+		    ON ZTemp.productId = XTemp.product_id 
+		  LEFT JOIN t_product p 
+		    ON p.id = XTemp.product_id 
+		WHERE XTemp.xData IS NOT NULL 
+		  AND YTemp.yData IS NOT NULL 
+		  AND ZTemp.zData IS NOT NULL 
+	</select>
+</mapper>

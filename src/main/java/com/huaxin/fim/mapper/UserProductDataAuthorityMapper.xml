@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.UserProductDataAuthorityMapper">
+	
+	<!-- 获取用户产品白名单数据（类别为产品）-->
+	<select id="getUserProductByConditionForProduct" parameterType="map" resultType="com.quantdo.iwin.response.User2ProductResponse">
+		SELECT 
+		  a.user_id userId,
+		  a.category category,
+		  a.item_id itemId,
+		  a.authority authority ,
+		  p.product_name itemName,
+		  a.id id
+		FROM
+		  t_user_product_data_authority a 
+		  left join t_product p on p.id = a.item_id
+		WHERE a.category = #{request.category,jdbcType=VARCHAR}
+		<if test="request.keyValue  != null and request.keyValue != '' ">
+		  	AND p.product_name  LIKE CONCAT('%',#{request.keyValue,jdbcType=VARCHAR}, '%')
+		</if>
+		<if test="request.userId  != null and request.userId != '' ">
+		  AND a.user_id  = #{request.userId,jdbcType=VARCHAR}
+	    </if>
+	</select>
+	
+	<!-- 获取用户产品白名单数据（类别为机构）-->
+	<select id="getUserProductByConditionForOrganization" parameterType="map" resultType="com.quantdo.iwin.response.User2ProductResponse">
+		SELECT 
+		  a.user_id userId,
+		  a.category category,
+		  a.item_id itemId,
+		  a.authority authority ,
+		  t.organization_name itemName,
+		  a.id id
+		FROM
+		  t_user_product_data_authority a 
+		  left join t_organization t on t.id = a.item_id
+		WHERE a.category = #{request.category,jdbcType=VARCHAR}
+		<if test="request.keyValue  != null and request.keyValue != '' ">
+		  AND t.organization_name LIKE CONCAT('%',#{request.keyValue,jdbcType=VARCHAR}, '%') 
+	    </if>
+	    <if test="request.userId  != null and request.userId != '' ">
+		  AND a.user_id  = #{request.userId,jdbcType=VARCHAR}
+	    </if>
+	</select>
+	
+	<!-- 获取用户产品白名单数据（类别为投顾）-->
+	<select id="getUserProductByConditionForInvestment" parameterType="map" resultType="com.quantdo.iwin.response.User2ProductResponse">
+		SELECT 
+		  a.user_id userId,
+		  a.category category,
+		  a.item_id itemId,
+		  a.authority authority ,
+		  t.company_name itemName,
+		  a.id id
+		FROM
+		  t_user_product_data_authority a 
+		  left join t_investment_manager t on t.id = a.item_id
+		WHERE a.category = #{request.category,jdbcType=VARCHAR}
+		<if test="request.keyValue  != null and request.keyValue != '' ">
+		  AND t.company_name LIKE CONCAT('%',#{request.keyValue,jdbcType=VARCHAR}, '%') 
+	    </if>
+	    <if test="request.userId  != null and request.userId != '' ">
+		  AND a.user_id  = #{request.userId,jdbcType=VARCHAR}
+	    </if>
+	</select>
+		  
+	<!-- 获取用户产品白名单数据（类别为用户）-->
+	<select id="getUserProductByConditionForUser" parameterType="map" resultType="com.quantdo.iwin.response.User2ProductResponse">
+		SELECT 
+		  a.user_id userId,
+		  a.category category,
+		  a.item_id itemId,
+		  a.authority authority ,
+		  a.id id
+		FROM
+		  t_user_product_data_authority a 
+		WHERE a.category = #{request.category,jdbcType=VARCHAR}
+		<if test="request.userId  != null and request.userId != '' ">
+		  AND a.user_id  = #{request.userId,jdbcType=VARCHAR}
+	    </if>
+	</select>    
+</mapper>

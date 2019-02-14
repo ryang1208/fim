@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.BasicInfoStatisticsMapper">
+	<!-- 取得最终统计日期 -->
+	<select id="getMaxStatisticDate" parameterType="String" resultType="String">
+		select stat_date  currentDate
+		from t_product_period_kpi_statistics
+		where 1=1
+	   	 <if test="productID != null and productID !=''">
+	    	and	product_id = #{productID,jdbcType=VARCHAR}
+	   	 </if>
+	   	 ORDER BY DATE DESC LIMIT 1
+  </select>
+  
+  <select id="getProductPeriodMaxDate" parameterType="map" resultType="String">
+		select stat_date  currentDate
+		from t_product_period_kpi_statistics
+		where 1=1
+	   	 <if test="fundCompareRequest.productIdArray != null and fundCompareRequest.productIdArray !=''">
+	    	and	product_id in 
+	    	<foreach item="productId" index="index" collection="fundCompareRequest.productIdArray" open="(" separator="," close=")">  
+		            #{productId}  
+		    </foreach>
+	   	 </if>
+	   	 ORDER BY stat_date DESC LIMIT 1
+  </select>
+  
+  <!-- 取得统计日期 -->
+	<select id="getMaxStatisticDateByKPI" parameterType="String" resultType="String">
+		select max(date)  currentDate
+		from t_product_index_period_kpi_statistics
+		where 1=1
+	   	 <if test="productIds != null and productIds !=''">
+	    	and	product_id in 
+	    	<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}  
+		    </foreach>
+	   	 </if>
+	   	 <if test="kpiCode != null and kpiCode !=''">
+	    	and	KPI = #{kpiCode,jdbcType=VARCHAR}
+	   	 </if>
+  </select>
+</mapper>

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductPeriodStatisticsMapper">
+
+	<!-- 删除年化指标统计历史表 -->
+    <delete id="delProductPeriodStatistics" parameterType="map">
+		delete from t_product_period_statistics
+		where 1=1
+		<if test="request != null">
+			<if test="request.productId  != null and request.productId != ''">
+				and product_id = #{request.productId ,jdbcType=VARCHAR}
+			</if>
+			<if test="request.kpiType != 0">
+				AND kpi IN 
+					  (SELECT 
+					    a.KPI 
+					  FROM
+					    t_kpi_dictionary a 
+					  WHERE a.type = #{request.kpiType,jdbcType=VARCHAR})
+			</if>
+			<if test="request.kpiCodes != null ">
+				and kpi in
+				<foreach item="kpiCode" index="index" collection="request.kpiCodes" open="(" separator="," close=")">  
+		            #{kpiCode}  
+		  		</foreach>
+			</if>
+			<if test="request.beginDate != null ">
+				and product_id in(select product_id from t_product_net_value where date &gt;#{request.beginDate,jdbcType=VARCHAR} group by product_id)
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 获取日收益率 -->
+	<select id="getYieldForYearYieldRatio" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  base.date DATE,
+		  base.today today,
+		  base.one_month oneMonth,
+		  base.three_month threeMonth,
+		  base.six_month sixMonth,
+		  base.one_year oneYear,
+		  base.until_now untilNow,
+		  base.this_year thisYear 
+		FROM
+		  t_product_period_kpi_statistics base 
+		WHERE KPI = '020032' 
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and base.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+	<!-- 获取日收益率指标 -->
+	<select id="getYieldListForSTD" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  base.date DATE,
+		  base.today today,
+		  base.one_month oneMonth,
+		  base.three_month threeMonth,
+		  base.six_month sixMonth,
+		  base.one_year oneYear,
+		  base.until_now untilNow,
+		  base.this_year thisYear 
+		FROM
+		  t_product_period_kpi_statistics base 
+		WHERE KPI = '020032' 
+			<if test="request.productId != null and request.productId != ''">
+				and base.product_id = #{request.productId,jdbcType=VARCHAR}
+			</if>
+			<if test="request.kpi != null and request.kpi != '' and request.kpi == '030045'">
+				AND base.today is not null and today &lt;=0
+			</if>
+			<if test="request.kpi != null and request.kpi != '' and request.kpi == '030044'">
+				AND base.today is not null and today &gt;0
+			</if>
+	</select>
+</mapper>

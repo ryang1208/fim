@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductCompositeScoreMapper">
+	<select id="getProductScoreList" parameterType="map" resultType="com.quantdo.iwin.response.ProductScoreResponse">
+		SELECT 
+		  tfb.date DATE,
+		  product.group_id team,
+		  product.product_name investerId,
+		  tfb.score productScore,
+		  tfb.ranking ranking,
+		  tfb.accumulative_trade_days tradeDays,
+		  ROUND(tfb.invester_equity_today,4) investerEquity,
+		  ROUND(tfb.tot_profit_today,4) closeProfit,
+		  ROUND(tfb.deposit_withdrawal_today,4) inOutMoney,
+		  tp.invester_id capitalAccout,
+		  tfb.product_id productId 
+		FROM
+		  t_product product 
+		   LEFT JOIN t_fund_rank tfb 
+		    ON product.id = tfb.product_id 
+		  LEFT JOIN t_product_invester_relationship tp 
+		    ON product.id = tp.product_id 
+		    AND tp.invester_type = '1' 
+		  LEFT JOIN t_broker tb 
+		    ON tp.broker_id = tb.id
+		WHERE tfb.date = #{request.tradeDate,jdbcType=VARCHAR} 
+			and tfb.report_id = #{request.reportId,jdbcType=VARCHAR}  
+		 	<if test="request.name != null and request.name != ''">
+			          and product.product_name like #{request.name,jdbcType=VARCHAR} 
+			</if>
+		 	<if test="request.capitalAccount != null and request.capitalAccount != ''">
+			          and tp.invester_id like #{request.capitalAccount,jdbcType=VARCHAR}
+			</if>
+		 	<if test="request.groupType != null and request.groupType != ''">
+		 		and product.group_id in 
+			 	<foreach item="type" index="index" collection="request.groupType" open="(" separator="," close=")">  
+		            #{type}
+			    </foreach>
+			</if>
+			ORDER BY team ASC ,productScore DESC
+	</select>
+	
+	<!-- 获取需要综合排名的指标及配置权重 -->
+	<select id="getReportParameterList" parameterType="map" resultType="com.quantdo.iwin.entity.FundEvaluationReportParameter">
+		SELECT 
+			t.id,
+		  	t.report_id reportId,
+			t.KPI kpi,
+			t.report_name reportName,
+			t.ser_no serNo,
+			t.weight weight,
+			t.period_type periodType,
+			t.calculate_type calculateType 
+		FROM
+		  t_fund_evaluation_report_parameter t
+		where   TYPE IS NOT NULL AND kpi IS NOT NULL
+		<if test="kpiType != 0">
+				AND t.kpi IN 
+					  (SELECT 
+					    a.KPI 
+					  FROM
+					    t_kpi_dictionary a 
+					  WHERE a.type = #{kpiType,jdbcType=VARCHAR})
+			</if>
+			<if test="kpiCodes != null ">
+				and t.kpi in
+				<foreach item="kpiCode" index="index" collection="kpiCodes" open="(" separator="," close=")">  
+		            #{kpiCode}  
+		  		</foreach>
+			</if>
+			<if test="reportId != null">
+				AND t.report_id = #{reportId,jdbcType=VARCHAR}
+			</if>
+			<if test="isUpdate != null">
+				AND t.is_update = #{isUpdate,jdbcType=VARCHAR}
+			</if>
+		GROUP BY t.report_id,
+		  t.KPI,
+		  t.period_type 
+	</select>
+	
+	<!-- 根据指标代码获取指定区间指标数据集 -->
+	<select id="getStatisticsListByKpi" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date,
+		  t.KPI,
+		  t.product_id productID,
+		  t.today,
+		  t.one_month oneMonth,
+		  t.three_month threeMonth,
+		  t.six_month sixMonth,
+		  t.one_year oneYear,
+		  t.this_year thisYear,
+		  t.until_now untilNow 
+		FROM
+		  t_product_period_kpi_statistics t 
+		WHERE t.date &gt;= #{beginDate,jdbcType=VARCHAR} 
+		  AND t.date &lt;= #{endDate,jdbcType=VARCHAR}  
+		  AND t.KPI = #{kpi,jdbcType=VARCHAR}   
+		  AND t.product_id = #{productId,jdbcType=VARCHAR}   
+		  AND(t.until_now IS NOT NULL OR t.today IS NOT NULL)
+	</select>
+	<!-- 获取指定条件平均分 -->
+	<select id="getAverageScore" parameterType="map" resultType="java.math.BigDecimal">
+		SELECT 
+		  ROUND(
+		    (SUM(IFNULL(a.origin_score, 0)) + #{currentDayScore,jdbcType=DECIMAL}) / (COUNT(DATE) + 1),
+		    2
+		  ) 
+		FROM
+		  t_fund_evaluation_report a 
+		WHERE a.report_id = #{reportId,jdbcType=VARCHAR} 
+		  AND a.product_id = #{productId,jdbcType=VARCHAR} 
+		  AND a.KPI = #{kpi,jdbcType=VARCHAR} 
+		  AND a.period_type = #{periodType,jdbcType=VARCHAR}
+		  AND a.date &lt; #{endDate,jdbcType=VARCHAR}  
+	 </select>
+	 
+	<!-- 获取报表代码列表 -->
+	<select id="getReportIdList" parameterType="map" resultType="java.lang.String">
+		SELECT 
+		  a.report_id 
+		FROM
+		  t_fund_evaluation_report_parameter a 
+		GROUP BY a.report_id 
+		ORDER BY a.report_id 
+	 </select>
+	 
+	 <!-- 获取排名报表表头项 -->
+	 <select id="getTableTitleList" parameterType="map" resultType="com.quantdo.iwin.response.ComplexRankTitleResponse">
+	 	SELECT 
+		  a.report_id reportId,
+		  a.report_name reportName,
+		  a.KPI kpi,
+		  t.KPI_describe kpiDescribe,
+		  a.period_type periodType,
+		  periodTemp.data_describe periodName 
+		FROM
+		  t_fund_evaluation_report_parameter a 
+		  LEFT JOIN t_kpi_dictionary t 
+		    ON a.KPI = t.KPI 
+		  LEFT JOIN 
+		    (SELECT 
+		      * 
+		    FROM
+		      t_iwin_data_dictionary c 
+		    WHERE c.data_type = 'StatisticPeriod') periodTemp 
+		    ON periodTemp.data_value = a.period_type 
+		where a.report_id = #{reportId,jdbcType=VARCHAR}
+		ORDER BY a.kpi,a.period_type
+	 </select>
+	 
+	 <!-- 获取动态列指标结果及得分等 -->
+     <select id="getKpiValueAndScore" parameterType="map" resultType="com.quantdo.iwin.entity.FundEvaluationReport">
+     	SELECT 
+		  a.date DATE,
+		  a.report_id reportId,
+		  a.product_id productId,
+		  a.KPI kpi,
+		  round(a.origin_score,2) originScore,
+		  round(a.average_score,2) averageScore,
+		  a.weight weight,
+		  round(a.score,2) score,
+		  a.period_type periodType,
+		  case when a.value=9999900 then a.value else round(a.value,4) end VALUE 
+		FROM
+		  t_fund_evaluation_report a 
+		 WHERE a.report_id = #{reportId,jdbcType=VARCHAR}
+		 	 AND a.date= #{date,jdbcType=VARCHAR} 
+		 	 AND a.product_id= #{productId,jdbcType=VARCHAR} 
+		 ORDER BY a.kpi,a.period_type
+	  </select>
+	  
+	  <!-- 获取报表类型列表 -->
+	  <select id="getReportIdTypeList" parameterType="map" resultType="com.quantdo.iwin.entity.FundEvaluationReportParameter">
+	  	SELECT 
+		  a.report_id reportId,
+		  a.report_name reportName 
+		FROM
+		  t_fund_evaluation_report_parameter a 
+		GROUP BY a.report_id 
+	  </select>
+	  
+	  <!-- 根据指标代码获取指定区间指标数据集 -->
+	  <select id="getHisStatisticsListByKpi" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodHisStatistics">
+	  	SELECT 
+		  a.date DATE,
+		  a.period_type periodType,
+		  a.product_id productID,
+		  a.value VALUE,
+		  a.KPI kpi 
+		FROM
+		  t_product_period_his_statistics a 
+		WHERE a.product_id = #{productId,jdbcType=VARCHAR} 
+		  AND a.KPI = #{kpi,jdbcType=VARCHAR} 
+		  AND a.date  &gt;= #{beginDate,jdbcType=VARCHAR}  
+		  AND a.date  &lt;= #{endDate,jdbcType=VARCHAR}   
+		  AND a.stat_date = 
+			  (SELECT 
+			    stat_date 
+			  FROM
+			    t_product_period_his_statistics 
+			  WHERE product_id = #{productId,jdbcType=VARCHAR} 
+			    AND kpi = #{kpi,jdbcType=VARCHAR}
+			    ORDER BY stat_date DESC LIMIT 1) 
+		ORDER BY a.date,a.period_type 
+	</select>
+	
+	<!-- 根据指标代码获取指定区间指标数据集 -->
+	  <select id="getNewestStatisticsListByKpi" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodStatistics">
+	  	SELECT 
+		  a.date DATE,
+		  a.period_type periodType,
+		  a.product_id productID,
+		  a.value VALUE,
+		  a.KPI kpi 
+		FROM
+		  t_product_period_statistics a 
+		WHERE 1=1 
+		<if test="productId != null">
+		  AND a.product_id = #{productId,jdbcType=VARCHAR} 
+		</if>
+		<if test="kpi != null">
+		  AND a.KPI = #{kpi,jdbcType=VARCHAR} 
+		  </if>
+		  <if test="endDate != null">
+		  AND a.date  &lt;= #{endDate,jdbcType=VARCHAR}  
+		  </if> 
+		ORDER BY a.date,a.period_type 
+	</select>
+	
+	<select id="getKpiValueAndScoreForYearKpi" parameterType="map" resultType="com.quantdo.iwin.entity.FundEvaluationReport">
+     	SELECT 
+		  a.date DATE,
+		  a.report_id reportId,
+		  a.product_id productId,
+		  a.KPI kpi,
+		  round(a.origin_score,2) originScore,
+		  round(a.average_score,2) averageScore,
+		  a.weight weight,
+		  round(a.score,2) score,
+		  a.period_type periodType,
+		  case when a.value=9999900 then a.value else round(a.value,4) end VALUE 
+		FROM
+		  t_fund_evaluation_report a 
+		 WHERE a.report_id = #{reportId,jdbcType=VARCHAR}
+		 	 AND a.date= #{date,jdbcType=VARCHAR} 
+		 	 AND a.kpi = #{kpi,jdbcType=VARCHAR} 
+		 	 AND a.product_id= #{productId,jdbcType=VARCHAR} 
+		 ORDER BY a.kpi,a.period_type
+	  </select>
+</mapper>

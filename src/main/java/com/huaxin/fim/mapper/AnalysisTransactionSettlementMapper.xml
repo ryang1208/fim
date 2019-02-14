@@ -1,0 +1,585 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisTransactionSettlementMapper">
+	
+	<!-- 计算日内开仓/平仓/总成交额指标（产品周期） -->
+	<select id="findDaysPeriodTurnoverList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date,
+		  sum(ifnull(t.turnover,0)) today
+		FROM
+		  t_transaction_summary t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id,
+		      product_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR} 
+		      AND invester_type = 1) temp 
+		    ON 1 = 1 
+		WHERE t.invester_id IN (temp.invester_id) 
+		  AND t.broker_id IN (temp.broker_id) 
+		  <if test="analysisProductPeriod.oc != null and analysisProductPeriod.oc != ''">
+			  AND t.oc = #{analysisProductPeriod.oc,jdbcType=VARCHAR}
+		  </if>
+		  <if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs != ''">
+			  and t.bs = #{analysisProductPeriod.bs,jdbcType=VARCHAR}
+		  </if>
+		GROUP BY t.date
+		order by t.date asc
+	</select>
+	
+	<!-- 计算日内成交额指标（产品品种） -->
+	<select id="findDaysVarietyTurnoverList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  t.date,
+		  sum(ifnull(t.turnover,0)) today,
+		  t.variety_id variety 
+		FROM
+		  t_transaction_summary t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id,
+		      product_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR} 
+		      AND invester_type = 1) temp 
+		    ON 1 = 1 
+		WHERE t.invester_id IN (temp.invester_id) 
+		  AND t.broker_id IN (temp.broker_id) 
+		  <if test="analysisProductPeriod.oc != null and analysisProductPeriod.oc != ''">
+			  AND t.oc = #{analysisProductPeriod.oc,jdbcType=VARCHAR}
+		  </if>
+		  <if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs != ''">
+			  and t.bs = #{analysisProductPeriod.bs,jdbcType=VARCHAR}
+		  </if>
+		GROUP BY t.variety_id, t.date 
+		ORDER BY t.date ASC;
+	</select>
+	
+	<!-- 计算日内品种套利成交额指标（产品品种） -->
+	<select id="findDaysVarietyArbitrageTurnoverList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		select base.date DATE,
+			base.product_id productID,
+			#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+			base.variety,
+			#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			<if test="analysisProductPeriod.bs == 0 ">
+			(case when (buyopen.today is null or sellopen.today is null) then 0
+				when buylots.today &lt; selllots.today then buyopen.today
+				when buylots.today >= selllots.today then round(buyopen.today/buylots.today*selllots.today,8)
+			end) today,
+			(case when (buyopen.one_month is null or sellopen.one_month is null) then 0
+				when buylots.one_month &lt; selllots.one_month then buyopen.one_month
+				when buylots.one_month >= selllots.one_month then round(buyopen.one_month/buylots.one_month*selllots.one_month,8)
+			end) oneMonth,
+			(case when (buyopen.three_month is null or sellopen.three_month is null) then 0
+				when buylots.three_month &lt; selllots.three_month then buyopen.three_month
+				when buylots.three_month >= selllots.three_month then round(buyopen.three_month/buylots.three_month*selllots.three_month,8)
+			end) threeMonth,
+			(case when (buyopen.six_month is null or sellopen.six_month is null) then 0
+				when buylots.six_month &lt; selllots.six_month then buyopen.six_month
+				when buylots.six_month >= selllots.six_month then round(buyopen.six_month/buylots.six_month*selllots.six_month,8)
+			end) sixMonth,
+			(case when (buyopen.one_year is null or sellopen.one_year is null) then 0
+				when buylots.one_year &lt; selllots.one_year then buyopen.one_year
+				when buylots.one_year >= selllots.one_year then round(buyopen.one_year/buylots.one_year*selllots.one_year,8)
+			end) oneYear,
+			(case when (buyopen.until_now is null or sellopen.until_now is null) then 0
+				when buylots.until_now &lt; selllots.until_now then buyopen.until_now
+				when buylots.until_now >= selllots.until_now then round(buyopen.until_now/buylots.until_now*selllots.until_now,8)
+			end) untilNow,
+			(case when (buyopen.this_year is null or sellopen.this_year is null) then 0
+				when buylots.this_year &lt; selllots.this_year then buyopen.this_year
+				when buylots.this_year >= selllots.this_year then round(buyopen.this_year/buylots.this_year*selllots.this_year,8)
+			end) thisYear
+			</if>
+			<if test="analysisProductPeriod.bs == 1 ">
+			(case when (buyopen.today is null or sellopen.today is null) then 0
+				when selllots.today &lt; buylots.today then sellopen.today
+				when selllots.today >= buylots.today then round(sellopen.today/selllots.today*buylots.today,8)
+			end) today,
+			(case when (buyopen.one_month is null or sellopen.one_month is null) then 0
+				when selllots.one_month &lt; buylots.one_month then sellopen.one_month
+				when selllots.one_month >= buylots.one_month then round(sellopen.one_month/selllots.one_month*buylots.one_month,8)
+			end) oneMonth,
+			(case when (buyopen.three_month is null or sellopen.three_month is null) then 0
+				when selllots.three_month &lt; buylots.three_month then sellopen.three_month
+				when selllots.three_month >= buylots.three_month then round(sellopen.three_month/selllots.three_month*buylots.three_month,8)
+			end) threeMonth,
+			(case when (buyopen.six_month is null or sellopen.six_month is null) then 0
+				when selllots.six_month &lt; buylots.six_month then sellopen.six_month
+				when selllots.six_month >= buylots.six_month then round(sellopen.six_month/selllots.six_month*buylots.six_month,8)
+			end) sixMonth,
+			(case when (buyopen.one_year is null or sellopen.one_year is null) then 0
+				when selllots.one_year &lt; buylots.one_year then sellopen.one_year
+				when selllots.one_year >= buylots.one_year then round(sellopen.one_year/selllots.one_year*buylots.one_year,8)
+			end) oneYear,
+			(case when (buyopen.until_now is null or sellopen.until_now is null) then 0
+				when selllots.until_now &lt; buylots.until_now then sellopen.until_now
+				when selllots.until_now >= buylots.until_now then round(sellopen.until_now/selllots.until_now*buylots.until_now,8)
+			end) untilNow,
+			(case when (buyopen.this_year is null or sellopen.this_year is null) then 0
+				when selllots.this_year &lt; buylots.this_year then sellopen.this_year
+				when selllots.this_year >= buylots.this_year then round(sellopen.this_year/selllots.this_year*buylots.this_year,8)
+			end) thisYear
+			</if>
+		from (select distinct product_id,variety,date from t_product_period_variety_kpi_statistics where date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR} and KPI in ('020001','020002')) base 
+		left join t_product_period_variety_kpi_statistics buyopen on buyopen.KPI = '020001' and base.product_id = buyopen.product_id and base.variety = buyopen.variety and base.date = buyopen.date
+		left join t_product_period_variety_kpi_statistics sellopen on sellopen.KPI = '020002' and base.product_id = sellopen.product_id and base.variety = sellopen.variety and base.date = sellopen.date
+		left join t_product_period_variety_kpi_statistics buylots on buylots.KPI = '020012' and base.product_id = buylots.product_id and base.variety = buylots.variety and base.date = buylots.date
+		left join t_product_period_variety_kpi_statistics selllots on selllots.KPI = '020013' and base.product_id = selllots.product_id and base.variety = selllots.variety and base.date = selllots.date
+		where 1=1
+		<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+			and base.product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<!-- 计算日内品种套利成交额指标（产品周期） -->
+	<select id="findDaysPeriodArbitrageTurnoverList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		select v.date DATE,
+			v.product_id productID,
+			#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+			#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			sum(v.today) today,
+			sum(v.one_month) oneMonth,
+			sum(v.three_month) threeMonth,
+			sum(v.six_month) sixMonth,
+			sum(v.one_year) oneYear,
+			sum(v.until_now) untilNow,
+			sum(v.this_year) thisYear
+		from t_product_period_variety_kpi_statistics v 
+		<if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs !=''">
+		where v.KPI = #{analysisProductPeriod.KPI,jdbcType=VARCHAR}
+		</if>
+		<if test="analysisProductPeriod.bs ==null or analysisProductPeriod.bs=='' ">
+		where v.KPI in ('030048','030049')
+		</if>
+		and v.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+			and v.product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		group by v.date,v.product_id
+	</select>
+	
+	<!-- 计算日内品系套利成交额指标（产品周期） -->
+	<select id="findDaysPeriodClassifyArbitrageTurnoverList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		select DATE,productID,#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,dataSource,statDate,
+			sum(today) today ,sum(oneMonth) oneMonth, sum(threeMonth)threeMonth,sum(sixMonth) sixMonth,sum(oneYear)oneYear,sum(untilNow) untilNow,sum(thisYear) thisYear
+		from (
+		select DATE,productID,classify,dataSource,statDate,
+		(case when buyToday &gt; sellToday then sellToday else buyToday end) today,
+		(case when buyOneMonth &gt; sellOneMonth then sellOneMonth else buyOneMonth end ) oneMonth,
+		(case when buyThreeMonth &gt; sellThreeMonth then sellThreeMonth else buyThreeMonth end ) threeMonth,
+		(case when buySixMonth &gt; sellSixMonth then sellSixMonth else buySixMonth end ) sixMonth,
+		(case when buyOneYear &gt; sellOneYear then sellOneYear else buyOneYear end ) oneYear,
+		(case when buyUntilNow &gt; sellUntilNow then sellUntilNow else buyUntilNow end ) untilNow,
+		(case when buyThisYear &gt; sellThisYear then sellThisYear else buyThisYear end ) thisYear
+		from (
+		select base.date DATE,base.product_id productID,base.classify,
+			't_product_period_variety_kpi_statistics' dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			if(isnull(buyList.today-sameVarietyBuyList.today),0,buyList.today-sameVarietyBuyList.today) buyToday,
+			if(isnull(sellList.today-sameVarietySellList.today),0,sellList.today-sameVarietySellList.today) sellToday,
+			if(isnull(buyList.oneMonth-sameVarietyBuyList.oneMonth),0,buyList.oneMonth-sameVarietyBuyList.oneMonth) buyOneMonth,
+			if(isnull(sellList.oneMonth-sameVarietySellList.oneMonth),0,sellList.oneMonth-sameVarietySellList.oneMonth) sellOneMonth,
+			if(isnull(buyList.threeMonth-sameVarietyBuyList.threeMonth),0,buyList.threeMonth-sameVarietyBuyList.threeMonth) buyThreeMonth,
+			if(isnull(sellList.threeMonth-sameVarietySellList.threeMonth),0,sellList.threeMonth-sameVarietySellList.threeMonth) sellThreeMonth,
+			if(isnull(buyList.sixMonth-sameVarietyBuyList.sixMonth),0,buyList.sixMonth-sameVarietyBuyList.sixMonth) buySixMonth,
+			if(isnull(sellList.sixMonth-sameVarietySellList.sixMonth),0,sellList.sixMonth-sameVarietySellList.sixMonth) sellSixMonth,
+			if(isnull(buyList.oneYear-sameVarietyBuyList.oneYear),0,buyList.oneYear-sameVarietyBuyList.oneYear) buyOneYear,
+			if(isnull(sellList.oneYear-sameVarietySellList.oneYear),0,sellList.oneYear-sameVarietySellList.oneYear) sellOneYear,
+			if(isnull(buyList.untilNow-sameVarietyBuyList.untilNow),0,buyList.untilNow-sameVarietyBuyList.untilNow) buyUntilNow,
+			if(isnull(sellList.untilNow-sameVarietySellList.untilNow),0,sellList.untilNow-sameVarietySellList.untilNow) sellUntilNow,
+			if(isnull(buyList.thisYear-sameVarietyBuyList.thisYear),0,buyList.thisYear-sameVarietyBuyList.thisYear) buyThisYear,
+			if(isnull(sellList.thisYear-sameVarietySellList.thisYear),0,sellList.thisYear-sameVarietySellList.thisYear) sellThisYear
+		from (select distinct product_id,date,classify
+						from t_product_period_variety_kpi_statistics base
+						left join t_variety vari on base.variety = vari.variety_id
+						where date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR} and KPI in ('020001','020002'))base 
+		left join (
+		select base.product_id,vari.classify,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_variety_kpi_statistics base
+		left join t_variety vari on base.variety = vari.variety_id
+		where base.KPI = '020001' and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id,vari.classify) buyList on base.product_id = buyList.product_id and base.classify = buyList.classify
+		left join (
+		select base.product_id,vari.classify,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_variety_kpi_statistics base
+		left join t_variety vari on base.variety = vari.variety_id
+		where base.KPI = '020002' and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id,vari.classify) sellList on base.product_id = sellList.product_id and base.classify = sellList.classify
+		left join (
+		select base.product_id,vari.classify,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_variety_kpi_statistics base
+		left join t_variety vari on base.variety = vari.variety_id
+		where base.KPI = '030048' and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id,vari.classify) sameVarietyBuyList on base.product_id = sameVarietyBuyList.product_id and base.classify = sameVarietyBuyList.classify
+		left join (
+		select base.product_id,vari.classify,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_variety_kpi_statistics base
+		left join t_variety vari on base.variety = vari.variety_id
+		where base.KPI = '030049' and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id,vari.classify) sameVarietySellList on base.product_id = sameVarietySellList.product_id and base.classify = sameVarietySellList.classify
+		)resultList)result
+		where 1=1
+		<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+			and productID = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		group by DATE,productID
+	</select>
+	
+	<!-- 计算日内跨品系对冲成交额指标（产品周期） -->
+	<select id="findDaysPeriodHedgingTurnoverList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		select DATE,productID,#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,dataSource,statDate,
+			sum(today) today ,sum(oneMonth) oneMonth, sum(threeMonth)threeMonth,sum(sixMonth) sixMonth,sum(oneYear)oneYear,sum(untilNow) untilNow,sum(thisYear) thisYear
+		from (
+		select DATE,productID,dataSource,statDate,
+		(case when buyToday &gt; sellToday then sellToday else buyToday end) today,
+		(case when buyOneMonth &gt; sellOneMonth then sellOneMonth else buyOneMonth end ) oneMonth,
+		(case when buyThreeMonth &gt; sellThreeMonth then sellThreeMonth else buyThreeMonth end ) threeMonth,
+		(case when buySixMonth &gt; sellSixMonth then sellSixMonth else buySixMonth end ) sixMonth,
+		(case when buyOneYear &gt; sellOneYear then sellOneYear else buyOneYear end ) oneYear,
+		(case when buyUntilNow &gt; sellUntilNow then sellUntilNow else buyUntilNow end ) untilNow,
+		(case when buyThisYear &gt; sellThisYear then sellThisYear else buyThisYear end ) thisYear
+		from (
+		select base.date DATE,base.product_id productID,
+			#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			if(isnull(buyList.today-sameVarietyBuyList.today),0,buyList.today-sameVarietyBuyList.today) buyToday,
+			if(isnull(sellList.today-sameVarietySellList.today),0,sellList.today-sameVarietySellList.today) sellToday,
+			if(isnull(buyList.oneMonth-sameVarietyBuyList.oneMonth),0,buyList.oneMonth-sameVarietyBuyList.oneMonth) buyOneMonth,
+			if(isnull(sellList.oneMonth-sameVarietySellList.oneMonth),0,sellList.oneMonth-sameVarietySellList.oneMonth) sellOneMonth,
+			if(isnull(buyList.threeMonth-sameVarietyBuyList.threeMonth),0,buyList.threeMonth-sameVarietyBuyList.threeMonth) buyThreeMonth,
+			if(isnull(sellList.threeMonth-sameVarietySellList.threeMonth),0,sellList.threeMonth-sameVarietySellList.threeMonth) sellThreeMonth,
+			if(isnull(buyList.sixMonth-sameVarietyBuyList.sixMonth),0,buyList.sixMonth-sameVarietyBuyList.sixMonth) buySixMonth,
+			if(isnull(sellList.sixMonth-sameVarietySellList.sixMonth),0,sellList.sixMonth-sameVarietySellList.sixMonth) sellSixMonth,
+			if(isnull(buyList.oneYear-sameVarietyBuyList.oneYear),0,buyList.oneYear-sameVarietyBuyList.oneYear) buyOneYear,
+			if(isnull(sellList.oneYear-sameVarietySellList.oneYear),0,sellList.oneYear-sameVarietySellList.oneYear) sellOneYear,
+			if(isnull(buyList.untilNow-sameVarietyBuyList.untilNow),0,buyList.untilNow-sameVarietyBuyList.untilNow) buyUntilNow,
+			if(isnull(sellList.untilNow-sameVarietySellList.untilNow),0,sellList.untilNow-sameVarietySellList.untilNow) sellUntilNow,
+			if(isnull(buyList.thisYear-sameVarietyBuyList.thisYear),0,buyList.thisYear-sameVarietyBuyList.thisYear) buyThisYear,
+			if(isnull(sellList.thisYear-sameVarietySellList.thisYear),0,sellList.thisYear-sameVarietySellList.thisYear) sellThisYear
+		from (select distinct product_id,date
+						from t_product_period_variety_kpi_statistics base
+						where date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR} and KPI in ('020001','020002'))base 
+		left join (
+		select base.product_id,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_variety_kpi_statistics base
+		where base.KPI = '020001' and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id) buyList on base.product_id = buyList.product_id 
+		left join (
+		select base.product_id,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_variety_kpi_statistics base
+		where base.KPI = '020002' and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id) sellList on base.product_id = sellList.product_id
+		left join (
+		select base.product_id,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_kpi_statistics base
+		where base.KPI in('030048','030016') and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id) sameVarietyBuyList on base.product_id = sameVarietyBuyList.product_id
+		left join (
+		select base.product_id,
+			sum(base.today) today,
+			sum(base.one_month) oneMonth,
+			sum(base.three_month) threeMonth,
+			sum(base.six_month) sixMonth,
+			sum(base.one_year) oneYear,
+			sum(base.until_now) untilNow,
+			sum(base.this_year) thisYear
+		from t_product_period_kpi_statistics base
+		where base.KPI in('030049','030016') and base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		group by base.date,base.product_id) sameVarietySellList on base.product_id = sameVarietySellList.product_id
+		)resultList)result
+		where 1=1
+		<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+			and productID = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		group by DATE,productID
+	</select>
+	
+	<!-- 计算日内净头寸指标（产品周期） -->
+	<select id="findDaysPeriodNetWorthList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		select base.date DATE,base.product_id productID, #{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+			#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			(base.today-(sameVarietyTurnOver.today+sameClassifyTurnOver.today*2+diffVarietyTurnOver.today*2)) today,
+			(base.one_month-(sameVarietyTurnOver.one_month+sameClassifyTurnOver.one_month*2+diffVarietyTurnOver.one_month*2)) oneMonth,
+			(base.three_month-(sameVarietyTurnOver.three_month+sameClassifyTurnOver.three_month*2+diffVarietyTurnOver.three_month*2)) threeMonth,
+			(base.six_month-(sameVarietyTurnOver.six_month+sameClassifyTurnOver.six_month*2+diffVarietyTurnOver.six_month*2)) sixMonth,
+			(base.one_year-(sameVarietyTurnOver.one_year+sameClassifyTurnOver.one_year*2+diffVarietyTurnOver.one_year*2)) oneYear,
+			(base.until_now-(sameVarietyTurnOver.until_now+sameClassifyTurnOver.until_now*2+diffVarietyTurnOver.until_now*2)) untilNow,
+			(base.this_year-(sameVarietyTurnOver.this_year+sameClassifyTurnOver.this_year*2+diffVarietyTurnOver.this_year*2)) thisYear
+		from t_product_period_kpi_statistics base 
+		left join (select product_id,today,one_month,three_month,six_month,one_year,until_now,this_year from t_product_period_kpi_statistics where date = #{analysisProductPeriod.statDate ,jdbcType=VARCHAR} and KPI = '030015') sameVarietyTurnOver on base.product_id = sameVarietyTurnOver.product_id
+		left join (select product_id,today,one_month,three_month,six_month,one_year,until_now,this_year from t_product_period_kpi_statistics where date = #{analysisProductPeriod.statDate ,jdbcType=VARCHAR} and KPI = '030016') sameClassifyTurnOver on base.product_id = sameClassifyTurnOver.product_id
+		left join (select product_id,today,one_month,three_month,six_month,one_year,until_now,this_year from t_product_period_kpi_statistics where date = #{analysisProductPeriod.statDate ,jdbcType=VARCHAR} and KPI = '030017') diffVarietyTurnOver on base.product_id = diffVarietyTurnOver.product_id
+		where base.date = #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+			and base.KPI = '020045'
+		<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+			and base.product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		group by base.date,base.product_id
+	</select>
+	
+	<!-- 计算多单盈亏额/空单盈亏额/累计盈亏额指标（产品品种） -->
+	<select id="findCloseProfitList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT DATE,
+			variety_id variety,
+			SUM(today) today
+		FROM (
+		SELECT t.date,t.variety_id,t.close_profit today
+		FROM t_transaction_summary t
+		WHERE CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) FROM t_product_invester_relationship WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR})
+		<if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs != ''">
+		  	AND t.bs = #{analysisProductPeriod.bs,jdbcType=VARCHAR}
+		  </if>
+		UNION ALL
+		SELECT t2.date,t2.variety_id,t2.position_profit_market today
+		FROM t_position_summary t2
+		WHERE CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) FROM t_product_invester_relationship WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR})
+		<if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs != ''">
+		  	AND t2.bs = #{analysisProductPeriod.bs,jdbcType=VARCHAR}
+		  </if>
+		)X
+		GROUP BY DATE,variety_id
+	</select>
+	
+	<!-- 计算多单盈亏额/空单盈亏额/累计盈亏额指标（产品品种） -->
+	<select id="findCloseProfitMarketList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT DATE,
+			variety_id variety,
+			(CASE WHEN SUM(today) = 0 THEN NULL ELSE SUM(today) END) today
+		FROM (
+			SELECT t.date,t.variety_id,t.close_profit_hedge today
+			FROM t_transaction_summary t
+			WHERE CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) FROM t_product_invester_relationship WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR})
+			<if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs != ''">
+			  	AND t.bs = #{analysisProductPeriod.bs,jdbcType=VARCHAR}
+			  </if>
+			UNION ALL
+			SELECT t2.date,t2.variety_id,0 today
+			FROM t_position_summary t2
+			WHERE CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) FROM t_product_invester_relationship WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR})
+			<if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs != ''">
+			  	AND t2.bs = #{analysisProductPeriod.bs,jdbcType=VARCHAR}
+			  </if>
+		)X
+		GROUP BY DATE,variety_id
+	</select>
+	
+	<!-- 计算风报比指标（产品周期） -->
+	<select id="findPeriodRiskReturnRateList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">			
+		select  drawdownList.date,
+			drawdownList.product_id productID,
+			#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+			drawdownList.data_source dataSource,
+			drawdownList.stat_date statDate
+			,
+			if(ISNULL(drawdownList.today),0,if(drawdownList.today=0,999999, format(yieldRateList.today/drawdownList.today,8))) today,
+			if(ISNULL(drawdownList.one_month),0,if(drawdownList.one_month=0,999999,format(yieldRateList.one_month/drawdownList.one_month,8))) oneMonth,
+			if(ISNULL(drawdownList.three_month),0,if(drawdownList.three_month=0,999999,format(yieldRateList.three_month/drawdownList.three_month,8))) threeMonth,
+			if(ISNULL(drawdownList.six_month),0,if(drawdownList.six_month=0,999999,format(yieldRateList.six_month/drawdownList.six_month,8))) sixMonth,
+			if(ISNULL(drawdownList.one_year),0,if(drawdownList.one_year=0,999999,format(yieldRateList.one_year/drawdownList.one_year,8))) oneYear,
+			if(ISNULL(drawdownList.until_now),0,if(drawdownList.until_now=0,999999,format(yieldRateList.until_now/drawdownList.until_now,8))) untilNow,
+			if(ISNULL(drawdownList.this_year),0,if(drawdownList.this_year=0,999999,format(yieldRateList.this_year/drawdownList.this_year,8))) thisYear
+		from t_product_period_kpi_statistics drawdownList
+		left join (select *
+		from t_product_period_kpi_statistics 
+		where KPI = '020005' 
+		and date = #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+		and product_id = '14396') yieldRateList on drawdownList.date = yieldRateList.date and drawdownList.product_id = yieldRateList.product_id
+		where drawdownList.KPI = '020008' 
+		and drawdownList.date = #{analysisProductPeriod.statDate ,jdbcType=VARCHAR}
+		<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+			and drawdownList.product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<!-- 计算日内买向/卖向平仓手数指标（产品品种） -->
+	<select id="findTransactionVarietyLotsList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  a.date,
+		  SUM(IFNULL(a.lots, 0)) today,
+		  a.variety_id variety
+		FROM
+		  t_transaction_summary a 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id,
+		      product_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR} 
+		      AND invester_type = 1) temp 
+		    ON 1 = 1 
+		    WHERE  a.invester_id IN (temp.invester_id) 
+		    AND a.broker_id IN (temp.broker_id) 
+		    <if test="analysisProductPeriod.bs != null and analysisProductPeriod.bs != ''">
+				AND a.bs = #{analysisProductPeriod.bs,jdbcType=VARCHAR}
+			</if>
+			<if test="analysisProductPeriod.oc != null and analysisProductPeriod.oc != ''">
+				AND a.oc = #{analysisProductPeriod.oc,jdbcType=VARCHAR}
+			</if>
+		GROUP BY a.date,a.variety_id
+		ORDER BY a.date
+	</select>
+	
+	<select id="test" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT * FROM t_product_period_kpi_statistics where date=#{date,jdbcType=VARCHAR}
+	</select>
+	<select id="test1" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT * FROM t_product_period_kpi_statistics where product_id=10240
+	</select>
+	
+	<select id="getClassify" parameterType="map" resultType="com.quantdo.iwin.entity.Classify">
+		SELECT DISTINCT 
+		  base.product_id productId,
+		  base.date date,
+		  vari.classify  classify
+		FROM
+		  t_product_period_variety_kpi_statistics base 
+		  LEFT JOIN t_variety vari 
+		    ON base.variety = vari.variety_id 
+		WHERE KPI IN ('020001', '020002') 
+		   <if test=" productId != null and productId != ''">
+			AND base.product_id = #{productId,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" startDate != null and startDate != ''">
+			AND base.date &gt;= #{startDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" endDate != null and endDate != ''">
+			AND base.date &lt;= #{endDate,jdbcType=VARCHAR}
+		  </if>
+		GROUP BY DATE,vari.variety_id
+ 	</select>
+ 	
+ 	<select id="findVaietyKPIByClassifyList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT base.product_id,base.date,vari.classify,base.KPI,
+			SUM(base.today) today,
+			SUM(base.one_month) oneMonth,
+			SUM(base.three_month) threeMonth,
+			SUM(base.six_month) sixMonth,
+			SUM(base.one_year) oneYear,
+			SUM(base.until_now) untilNow,
+			SUM(base.this_year) thisYear
+		FROM t_product_period_variety_kpi_statistics base
+		LEFT JOIN t_variety vari ON base.variety = vari.variety_id
+		WHERE base.KPI IN('020001','020002','030048','030049') 
+		AND is_priority = '1'
+		  <if test=" productId != null and productId != ''">
+			AND base.product_id = #{productId,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" startDate != null and startDate != ''">
+			AND base.date &gt;= #{startDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" endDate != null and endDate != ''">
+			AND base.date &lt;= #{endDate,jdbcType=VARCHAR}
+		  </if>
+		GROUP BY base.date,vari.classify,base.KPI
+	</select>
+	
+	<select id="findVaietyKPIList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT base.product_id,base.date,base.KPI,
+			SUM(base.today) today,
+			SUM(base.one_month) oneMonth,
+			SUM(base.three_month) threeMonth,
+			SUM(base.six_month) sixMonth,
+			SUM(base.one_year) oneYear,
+			SUM(base.until_now) untilNow,
+			SUM(base.this_year) thisYear
+		FROM t_product_period_variety_kpi_statistics base
+		WHERE base.KPI IN(020001,020002,030048,030049) 
+		  <if test=" productId != null and productId != ''">
+			AND base.product_id = #{productId,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" startDate != null and startDate != ''">
+			AND base.date &gt;= #{startDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" endDate != null and endDate != ''">
+			AND base.date &lt;= #{endDate,jdbcType=VARCHAR}
+		  </if>
+		GROUP BY base.date,base.KPI
+		UNION 
+		(SELECT base.product_id,base.date,base.KPI,
+			SUM(base.today) today,
+			SUM(base.one_month) oneMonth,
+			SUM(base.three_month) threeMonth,
+			SUM(base.six_month) sixMonth,
+			SUM(base.one_year) oneYear,
+			SUM(base.until_now) untilNow,
+			SUM(base.this_year) thisYear
+		FROM t_product_period_kpi_statistics base
+		WHERE base.KPI=030016 
+		  <if test=" productId != null and productId != ''">
+			AND base.product_id = #{productId,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" startDate != null and startDate != ''">
+			AND base.date &gt;= #{startDate,jdbcType=VARCHAR}
+		  </if>
+		  <if test=" endDate != null and endDate != ''">
+			AND base.date &lt;= #{endDate,jdbcType=VARCHAR}
+		  </if>
+		GROUP BY base.date)
+	</select>
+ 	
+</mapper>

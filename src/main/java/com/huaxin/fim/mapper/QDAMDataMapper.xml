@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.QDAMDataMapper">
+
+	<delete id="deleteTradeHis" parameterType="map">
+		delete from t_transaction_summary
+		<where>
+			date = #{date,jdbcType=VARCHAR}
+			<if test="accountId != null and accountId != ''">
+				invester_id = #{accountId ,jdbcType=VARCHAR}
+			</if>
+		</where>
+	</delete>
+
+
+	<insert id="insertTransaction" parameterType="map">
+		insert into
+		t_transaction_summary SELECT
+		date,invester_id,contact,bs,oc,sh,case
+		when SUM(lots)=0 then 0 else
+		SUM(turnover)/SUM(lots) end as price,
+		sum(lots),sum(turnover),sum(commission),sum(close_profit),data_source
+		from t_transaction_details
+		<where>
+			date = #{date,jdbcType=VARCHAR} and
+			data_source
+			=#{dataSource,jdbcType=INTEGER}
+		</where>
+	</insert>
+
+
+
+	<!-- <delete id="">
+		delete from t_variety_summary
+		<where>
+			date = #{date,jdbcType=VARCHAR}
+			<if test="accountId != null and accountId != ''">
+				 invester_id = #{accountId ,jdbcType=VARCHAR}
+			</if>
+		</where>
+	</delete> -->
+
+
+	<resultMap id="TradeMap" type="com.quantdo.iwin.entity.TransactionDetails">
+		<result property="date" column="date" />
+		<result property="transactionDate" column="transaction_date" />
+		<result property="investerID" column="invester_id" />
+		<result property="contact" column="contact" />
+		<result property="transcationNO" column="transcation_no" />
+		<result property="transcationTime" column="transcation_time" />
+		<result property="bs" column="bs" />
+		<result property="oc" column="oc" />
+		<result property="sh" column="sh" />
+		<result property="price" column="price" />
+		<result property="lots" column="lots" />
+		<result property="turnover" column="turnover" />
+		<result property="commission" column="commission" />
+		<result property="closeProfit" column="close_profit" />
+		<result property="dataSource" column="data_source" />
+	</resultMap>
+
+
+
+	<select id="getTradeList" parameterType="map" resultMap="TradeMap">
+		SELECT
+		transcation_no,
+		transcation_time,
+		sh,
+		oc,
+		invester_id,
+		date,
+		transaction_date,
+		contact,
+		bs,
+		close_profit,
+		commission,
+		data_source,
+		lots,
+		price,
+		turnover
+		FROM t_transaction_details
+		<where>
+			<if test="accountId != null and accountId != ''">
+				invester_id = #{accountId ,jdbcType=VARCHAR}
+			</if>
+			<if test="date != null and date != ''">
+				date = #{date ,jdbcType=VARCHAR}
+			</if>
+		</where>
+
+	</select>
+
+</mapper>

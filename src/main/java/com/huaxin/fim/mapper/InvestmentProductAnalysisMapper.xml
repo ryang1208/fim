@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.InvestmentProductAnalysisMapper">
+	
+	<select id="getInvestmentProductFundList" parameterType="map" resultType="com.quantdo.iwin.response.InvestmentProductAnalysisResponse">
+		SELECT 
+		  p.id productId,
+		  p.product_name productName,
+		  p.product_status productStatus,
+		  IFNULL(
+		    ROUND(
+		      netValue.net_accumulative_value,
+		      2
+		    ),
+		    ''
+		  ) netValue,
+		  CASE
+		    WHEN netValue.total_share IS NULL 
+		    THEN IFNULL(
+		      ROUND(
+		        netValue.asset_value / netValue.net_asset_value,
+		        0
+		      ),
+		      ''
+		    ) 
+		    ELSE IFNULL(
+		      ROUND(netValue.total_share, 0),
+		      ''
+		    ) 
+		  END totalShare,
+		  CASE
+		    WHEN p.is_calculate_netValue = '0' 
+		    THEN IFNULL(ROUND(netValue.asset_value, 2), '') 
+		    ELSE IFNULL(
+		      ROUND(invester.invester_equity, 2),
+		      ''
+		    ) 
+		  END assetValue,
+		  IFNULL(ROUND(invester.maxFunds*100, 2), '') maxFundsUseRatio,
+		  IFNULL(
+		    ROUND(avgFunds.avgFundsUseRatio*100, 2),
+		    ''
+		  ) avgFundsUseRatio,
+		  IFNULL(p.strategy_list, '') stragegy,
+		  IFNULL(
+		    ROUND(untilNowYieldRatio.value*100, 2),
+		    ''
+		  ) yieldRatio,
+		  IFNULL(
+		    ROUND(oneMonthYieldRatio.value*100, 2),
+		    ''
+		  ) oneMonthYieldRatio,
+		  IFNULL(
+		    ROUND(threeMonthYieldRatio.value*100, 2),
+		    ''
+		  ) threeMonthYieldRatio,
+		  IFNULL(ROUND(yearYieldRatio.value*100, 2), '') yearYieldRatio,
+		  IFNULL(ABS(ROUND(maxDrawDown.value*100, 2)), '') maxDrawDown,
+		  IFNULL(ROUND(sharp.value*100, 2), '') sharp,
+		  IFNULL(p.create_date, '') createDate,
+		  IFNULL(p.settlement_date, '') settlementDate,
+		  IFNULL(m.company_name, '') investmentName 
+		FROM
+		  t_product p 
+		  LEFT JOIN t_investment_manager m 
+		    ON p.investment_id = m.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.product_id,
+		      temp.init_share 
+		    FROM
+		      (SELECT 
+		        a.product_id,
+		        a.init_share 
+		      FROM
+		        t_product_share_history a 
+		      GROUP BY a.product_id,
+		        a.date DESC) temp 
+		    GROUP BY temp.product_id) totalShare 
+		    ON totalShare.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.product_id,
+		      temp.invester_equity,
+		      MAX(temp.risk_degree) maxFunds 
+		    FROM
+		      (SELECT 
+		        r.product_id,
+		        a.invester_equity,
+		        a.risk_degree 
+		      FROM
+		        t_invester_fund a 
+		        LEFT JOIN t_product_invester_relationship r 
+		          ON a.invester_id = r.invester_id 
+		          AND a.broker_id = r.broker_id 
+		      WHERE r.product_id IS NOT NULL 
+		      GROUP BY r.product_id,
+		        a.date DESC) temp 
+		    GROUP BY temp.product_id) invester 
+		    ON invester.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.product_id,
+		      temp.date,
+		      temp.net_accumulative_value,
+		      temp.asset_value,
+		      temp.net_asset_value,
+		      temp.total_share  
+		    FROM
+		      (SELECT 
+		        a.product_id,
+		        a.date,
+		        a.net_accumulative_value,
+		        a.asset_value,
+		        a.net_asset_value,
+		        a.total_share  
+		      FROM
+		        t_product_net_value a 
+		      GROUP BY a.product_id,
+		        a.date DESC) temp 
+		    GROUP BY temp.product_id) netValue 
+		    ON netValue.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      r.product_id,
+		      AVG(risk_degree) avgFundsUseRatio 
+		    FROM
+		      t_invester_fund f 
+		      LEFT JOIN t_product_invester_relationship r 
+		        ON f.invester_id = r.invester_id 
+		        AND f.broker_id = r.broker_id 
+		    WHERE product_id IS NOT NULL 
+		    GROUP BY r.product_id) avgFunds 
+		    ON avgFunds.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.KPI = '020032' 
+		      AND a.period_type = '0') untilNowYieldRatio 
+		    ON untilNowYieldRatio.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.KPI = '020032' 
+		      AND a.period_type = '1') oneMonthYieldRatio 
+		    ON oneMonthYieldRatio.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.KPI = '020032' 
+		      AND a.period_type = '2') threeMonthYieldRatio 
+		    ON threeMonthYieldRatio.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.KPI = '030002' 
+		      AND a.period_type = '0') yearYieldRatio 
+		    ON yearYieldRatio.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.KPI = '040006' 
+		      AND a.period_type = '0') maxDrawDown 
+		    ON maxDrawDown.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.KPI = '030007' 
+		      AND a.period_type = '0') sharp 
+		    ON sharp.product_id = p.id 
+		WHERE p.is_independent ='1'
+		      AND p.product_status &lt;&gt;3
+		  	<!-- 产品状态  -->
+            <if test="request.productStatusList != null and request.productStatusList != ''">
+                and p.product_status in
+                <foreach item="id" index="index" collection="request.productStatusList" open="(" separator="," close=")">  
+		            #{id}
+		    	</foreach>
+            </if>
+			<!-- 投资策略  -->
+            <if test="request.strategyList != null and request.strategyList != ''">
+                and 
+                <foreach open="(" separator=" or " close=")" item="item" index="index" collection="request.strategyList">
+				   <if test="item != null and item != ''">
+						(p.strategy_list like  CONCAT('%', #{item}, '%')) 
+				   </if>
+				</foreach>
+            </if>
+            <if test="ids != null and ids != ''">
+                and 
+                <foreach open="(" separator=" or " close=")" item="item" index="index" collection="ids">
+				   <if test="item != null and item != ''">
+						p.id = #{item}
+				   </if>
+				</foreach>
+            </if>
+            order by p.product_name
+	</select>
+</mapper>

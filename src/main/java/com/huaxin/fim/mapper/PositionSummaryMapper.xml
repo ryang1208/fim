@@ -1,0 +1,667 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.PositionSummaryMapper">
+	<select id="getPositionSummaryByPositionDetails" parameterType="map"
+		resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT t.date DATE,
+		t.investerID investerID,
+		t.brokerID brokerID,
+		t.contact contact,
+		t.positionBuy positionBuy,
+		t.priceBuy/t.positionBuy
+		priceBuy,
+		t.positionSell positionSell,
+		t.priceSell/t.positionSell
+		priceSell,
+		t.settlementPriceToday settlementPriceToday,
+		t.settlementPriceYesterday settlementPriceYesterday,
+		t.floatingProfit
+		floatingProfit,
+		t.sh sh,
+		t.dataSource dataSource,
+		t.industry industry,
+		t.varietyID varietyID,
+		t.marketType marketType,
+		t.updateDate updateDate,
+		t.positionProfitMarket positionProfitMarket,
+		t.margin margin
+		FROM(SELECT
+		t.date DATE,
+		t.invester_id investerID,
+		t.broker_id brokerID,
+		t.contact contact,
+		tc.asset_type marketType,
+		tc.industry industry,
+		tc.variety_id varietyID,
+		t.update_date updateDate,
+		SUM(IFNULL(t.position_buy,0)) positionBuy,
+		SUM(IFNULL(t.position_buy,0)*IFNULL(t.price_buy,0))
+		priceBuy,
+		SUM(IFNULL(t.position_sell,0)) positionSell,
+		SUM(IFNULL(t.position_sell,0)*IFNULL(t.price_sell,0)) priceSell,
+		t.settlement_price_today settlementPriceToday,
+		t.settlement_price_yesterday settlementPriceYesterday,
+		SUM(t.position_profit) floatingProfit,
+		t.sh sh,
+		t.data_source
+		dataSource,
+		SUM(t.position_profit_market) positionProfitMarket,
+		SUM(IFNULL(t.margin,0)) margin
+		FROM
+		t_position_details t
+		LEFT JOIN t_contract tc ON
+		tc.contract=t.contact AND tc.date = t.date
+		WHERE 1= 1
+		<if test="positionDetails.date  != null and positionDetails.date != '' ">
+			AND t.date =#{positionDetails.date ,jdbcType=VARCHAR}
+		</if>
+		<if
+			test="positionDetails.investerID  != null and positionDetails.investerID != '' ">
+			AND t.invester_id = #{positionDetails.investerID
+			,jdbcType=VARCHAR}
+		</if>
+		AND (t.price_buy =0 or t.price_buy is null)
+		GROUP BY t.date,t.invester_id,t.broker_id,t.contact,t.sh
+		UNION ALL
+		(SELECT
+		t.date DATE,
+		t.invester_id investerID,
+		t.broker_id brokerID,
+		t.contact contact,
+		tc.asset_type marketType,
+		tc.industry industry,
+		tc.variety_id varietyID,
+		t.update_date updateDate,
+		SUM(IFNULL(t.position_buy,0)) positionBuy,
+		SUM(IFNULL(t.position_buy,0)*IFNULL(t.price_buy,0))
+		priceBuy,
+		SUM(IFNULL(t.position_sell,0)) positionSell,
+		SUM(IFNULL(t.position_sell,0)*IFNULL(t.price_sell,0)) priceSell,
+		t.settlement_price_today settlementPriceToday,
+		t.settlement_price_yesterday settlementPriceYesterday,
+		SUM(t.position_profit) floatingProfit,
+		t.sh sh,
+		t.data_source
+		dataSource,
+		SUM(t.position_profit_market) positionProfitMarket,
+		SUM(IFNULL(t.margin,0)) margin
+		FROM
+		t_position_details t
+		LEFT JOIN t_contract tc ON
+		tc.contract=t.contact AND tc.date = t.date
+		WHERE 1= 1
+		<if test="positionDetails.date  != null and positionDetails.date != '' ">
+			AND t.date =#{positionDetails.date ,jdbcType=VARCHAR}
+		</if>
+		<if
+			test="positionDetails.investerID  != null and positionDetails.investerID != '' ">
+			AND t.invester_id = #{positionDetails.investerID
+			,jdbcType=VARCHAR}
+		</if>
+		AND (t.price_sell =0 or t.price_sell is null)
+		GROUP BY t.date,t.invester_id,t.broker_id,t.contact,t.sh)) t
+	</select>
+	
+	<!-- 根据产品ID及更新日期获取持仓汇总 -->
+	<select id="getPositionSummaryByProductIdAndUpdate" parameterType="map" resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  t.sh,
+		  t.bs,
+		  t.price_buy priceBuy,
+		  t.price_sell priceSell,
+		  t.invester_id investerID,
+		  t.broker_id brokerID,
+		  t.date DATE,
+		  t.update_date updateDate,
+		  t.contact contact,
+		  t.data_source dataSource,
+		  t.floating_profit floatingProfit,
+		  t.margin margin,
+		  t.position_buy positionBuy,
+		  t.position_sell positionSell,
+		  t.settlementPrice_today settlementPriceToday,
+		  t.settlementPrice_yesterday settlementPriceYesterday,
+		  t.ori_margin oriMargin,
+		  t.market_type marketType,
+		  t.position_cost positionCost,
+		  t.total_profit totalProfit,
+		  t.market_capitalization marketCapitalization,
+		  t.industry industry,
+		  t.stock_type stockType,
+		  t.variety_id varietyID,
+		  t.position_profit_market positionProfitMarket
+		FROM
+		  t_position_summary as t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship tp 
+		    WHERE product_id in
+			<foreach item="productId" index="index" collection="productIdList" open="(" separator="," close=")">  
+	            #{productId}  
+	  		</foreach>
+		    )as temp 
+		    ON 1 = 1 
+		    WHERE t.invester_id IN (temp.invester_id) 
+		    AND t.broker_id IN (temp.broker_id) 
+		    AND t.update_date =  #{updateDate,jdbcType=VARCHAR} 
+		    and t.position_buy &lt;&gt;0 and t.position_buy is not null 
+    		and t.position_sell &lt;&gt;0 and t.position_sell is not null 
+	</select>
+	
+	<!-- 根据产品ID及更新日期获取持仓汇总 -->
+	<delete id="deletePositionSummaryByProductIdAndUpdate" parameterType="map">
+		DELETE 
+		  p 
+		FROM
+		  t_position_summary AS p 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id IN 
+		    <foreach item="productId" index="index" collection="productIdList" open="(" separator="," close=")">  
+	            #{productId}  
+	  		</foreach>
+		    )  AS temp 
+		    ON 1 = 1 
+		WHERE p.invester_id IN (temp.invester_id) 
+		  AND p.broker_id IN (temp.broker_id) 
+		  AND p.update_date = #{updateDate,jdbcType=VARCHAR}   
+		  AND p.position_buy &lt;&gt; 0 
+		  AND p.position_buy IS NOT NULL 
+		  AND p.position_sell &lt;&gt; 0 
+		  AND p.position_sell IS NOT NULL 
+	</delete>
+	
+	<!-- 更新持仓汇总的还原保证金算法 -->
+	<update id="updatePositionSummaryOriMargin"  parameterType="map">
+		UPDATE 
+		  t_position_summary as t 
+		  LEFT JOIN t_contract as c 
+		    ON t.date = c.date 
+		    AND t.contact = c.contract 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id in
+			<foreach item="productId" index="index" collection="productIdList" open="(" separator="," close=")">  
+	            #{productId}  
+	  		</foreach>
+		    ) as temp 
+		    ON 1 = 1 SET t.ori_margin = (
+		      CASE
+		        WHEN IFNULL(t.price_buy, 0) > 0 
+		        THEN CAST(
+		          IFNULL(t.price_buy, 0) * t.position_buy * c.contract_multiplier AS DECIMAL (20, 4)
+		        ) 
+		        ELSE CAST(
+		          IFNULL(t.price_sell, 0) * t.position_sell * c.contract_multiplier AS DECIMAL (20, 4)
+		        ) 
+		      END
+		    ) 
+		WHERE t.broker_id IN (temp.broker_id) 
+		  AND t.invester_id IN (temp.invester_id) 
+		  AND t.update_date = #{updateDate,jdbcType=VARCHAR}  
+	</update>
+	
+	<!-- 更新持仓汇总的持仓盈亏 -->
+	<update id="updatePositionProfitMarket"  parameterType="map">
+		UPDATE t_position_summary ts ,(SELECT 
+		  t.date DATE,
+		  t.investerID investerID,
+		  t.brokerID brokerID,
+		  t.contact,
+		  t.sh,
+		  t.positionProfitMarket positionProfitMarket 
+		FROM
+		  (SELECT 
+		    t.date DATE,
+		    t.invester_id investerID,
+		    t.broker_id brokerID,
+		    t.contact,t.sh,
+		    SUM(t.position_profit_market) positionProfitMarket 
+		  FROM
+		    t_position_details t 
+		  WHERE 1 = 1 
+		  GROUP BY t.date,
+		    t.invester_id,
+		    t.broker_id,
+		    t.contact,
+		    t.sh) t ) p
+		    LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id IN 
+		    <foreach item="productId" index="index" collection="productIdList" open="(" separator="," close=")">  
+	            #{productId}  
+	  		</foreach>
+		    ) AS temp 
+		    ON 1 = 1
+		    SET ts.position_profit_market = p.positionProfitMarket
+		    WHERE ts.date=p.date AND ts.invester_id=p.investerID AND ts.broker_id=p.brokerID 
+		    AND ts.contact=p.contact AND ts.sh=p.sh
+		    AND ts.broker_id IN (temp.broker_id) 
+		    AND ts.invester_id IN (temp.invester_id) 
+		    AND ts.update_date = #{updateDate,jdbcType=VARCHAR}
+		    AND ts.position_profit_market IS NULL
+	</update>
+	
+	<!-- 从估值表中获取持仓数据列表 -->
+	<select id="getPositionSummaryFromValuation" parameterType="map" resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  '2' sh,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN 0 
+		    ELSE 1 
+		  END bs,
+		  CASE
+		    WHEN t.cost &lt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0),4)
+		    ELSE 0
+		  END  priceSell,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0),4)
+		    ELSE 0
+		  END priceBuy,
+		  #{investerId,jdbcType=VARCHAR} investerID,
+		  #{brokerId,jdbcType=VARCHAR} brokerID,
+		  t.date DATE,
+		  CASE
+		    WHEN LEFT(RIGHT(t.account_code, 6), 1) = '0' and #{marketType,jdbcType=VARCHAR}='1'
+		    THEN RIGHT(RIGHT(t.account_code, 6), 5) 
+		    ELSE RIGHT(t.account_code, 6) 
+		  END contact,
+		  '9' dataSource,
+		  round(SUM(
+		    IFNULL(t.appreciation_valuation, 0)
+		  ) ,4)floatingProfit,
+		  null margin,
+		  round(SUM(
+		    CASE
+		      WHEN t.cost &gt; 0 
+		      THEN amount 
+		      ELSE 0 
+		    END
+		  ),4) positionBuy,
+		 round( SUM(
+		    CASE
+		      WHEN t.cost &lt; 0 
+		      THEN amount 
+		      ELSE 0 
+		    END
+		  ) ,4)positionSell,
+		  round(t.unit_cost,4) settlementPriceToday,
+		  NULL settlementPriceYesterday,                      
+		  round(SUM(IFNULL(ABS(t.cost), 0)),4) oriMargin,   
+		  #{marketType,jdbcType=VARCHAR} marketType,
+		  NULL positionCost, 
+		  NULL totalProfit,
+		  case when #{marketType,jdbcType=VARCHAR}='2'
+		  then
+			  round(SUM(
+			    IFNULL(t.market_capitalization, 0)
+			  ),4) 
+		  else NULL end marketCapitalization,
+		  c.industry industry,
+		  c.stock_type stockType,
+		  c.variety_id varietyID,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate,
+		  null positionProfitMarket
+		FROM
+		  t_fund_valuation_table t 
+		  LEFT JOIN t_contract c 
+		    ON c.contract = 
+		    CASE
+			    WHEN LEFT(RIGHT(t.account_code, 6), 1) = '0' and #{marketType,jdbcType=VARCHAR}='1'
+			    THEN RIGHT(RIGHT(t.account_code, 6), 5) 
+			    ELSE RIGHT(t.account_code, 6) 
+		    END 
+		    AND c.date = t.date 
+		WHERE CHARACTER_LENGTH(t.account_code) &gt; 8 
+		  <if test="accountCodes != null ">
+				 AND 
+			  <foreach item="accountCode" index="index" collection="accountCodes" open="(" separator="or" close=")">  
+				    t.account_code LIKE  #{accountCode}
+		  	  </foreach>
+		  </if>
+		  AND t.product_id = #{productId,jdbcType=VARCHAR} 
+		  AND t.date = #{date,jdbcType=VARCHAR}
+		  and t.trustee_id = #{trusteeId,jdbcType=VARCHAR}  
+		GROUP BY contact 
+	</select>
+	
+	<!-- 股息率指标计算 -->
+	<select id="calculateDividendRatio" parameterType="map" resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  a.date,
+		  a.market_capitalization marketCapitalization,
+		  t.product_id productID,
+		  c.dividend_ratio dividendRatio
+		FROM
+		  t_position_summary a 
+		   LEFT JOIN t_contract c 
+    		ON a.contact = c.contract AND a.date = c.date
+		  LEFT JOIN t_product_invester_relationship t 
+		    ON a.invester_id = t.invester_id 
+		    AND a.broker_id = t.broker_id 
+		WHERE t.product_id = #{productId,jdbcType=VARCHAR}  
+		  AND a.market_type = '2' 
+		  AND a.industry IS NOT NULL 
+		  AND a.market_capitalization IS NOT NULL 
+		  AND a.date &gt;= #{beginDate,jdbcType=VARCHAR} 
+		  AND a.date &lt;= #{endDate,jdbcType=VARCHAR} 
+		  AND c.dividend_ratio IS NOT NULL 
+		ORDER BY t.product_id,
+		  a.date 
+	</select>
+	<!-- 估值表解析期货入持仓 -->
+	<select id="getFuturePositionSummaryFromValuation" parameterType="map" resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  '2' sh,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN 0 
+		    ELSE 1 
+		  END bs,
+		  CASE
+		    WHEN t.cost &lt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0), 4) 
+		    ELSE 0 
+		  END priceSell,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0), 4) 
+		    ELSE 0 
+		  END priceBuy,
+		  #{investerId,jdbcType=VARCHAR} investerID,
+		  #{brokerId,jdbcType=VARCHAR} brokerID,
+		  t.date DATE,
+		  CASE
+		     WHEN LEFT(REPLACE(t.account_code,t.third_class_account_code,''), 1) = '0' 
+ 		     THEN RIGHT(REPLACE(t.account_code,t.third_class_account_code,''), 5) 
+ 		     ELSE  REPLACE(t.account_code,t.third_class_account_code,'')
+ 		  END contact,
+		  '9' dataSource,
+		  ROUND(
+		    SUM(
+		      IFNULL(t.appreciation_valuation, 0)
+		    ),
+		    4
+		  ) positionProfitMarket,
+		  NULL margin,
+		  ROUND(
+		    SUM(
+		      CASE
+		        WHEN t.cost &gt; 0 
+		        THEN amount 
+		        ELSE 0 
+		      END
+		    ),
+		    4
+		  ) positionBuy,
+		  ROUND(
+		    SUM(
+		      CASE
+		        WHEN t.cost &lt; 0 
+		        THEN amount 
+		        ELSE 0 
+		      END
+		    ),
+		    4
+		  ) positionSell,
+		  ROUND(t.market_value, 4) settlementPriceToday,
+		  NULL settlementPriceYesterday,
+		  ROUND(SUM(IFNULL(ABS(t.cost), 0)), 4) oriMargin,
+		  CASE
+		    WHEN v.exchange_id = 'CFFEX' 
+		    AND v.classify = '6' 
+		    THEN '7' 
+		    ELSE '1' 
+		  END marketType,
+		  NULL positionCost,
+		  NULL totalProfit,
+		  NULL marketCapitalization,
+		  c.industry industry,
+		  c.stock_type stockType,
+		  c.variety_id varietyID,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate,
+		  NULL positionProfitMarket 
+		FROM
+		  t_fund_valuation_table t 
+		  LEFT JOIN t_contract c 
+		    ON c.contract = 
+		    CASE
+		     WHEN LEFT(REPLACE(t.account_code,t.third_class_account_code,''), 1) = '0' 
+ 		     THEN RIGHT(REPLACE(t.account_code,t.third_class_account_code,''), 5) 
+ 		     ELSE  REPLACE(t.account_code,t.third_class_account_code,'')
+ 		  END 
+		    AND c.date = t.date 
+		  left join t_variety v 
+    		ON v.variety_id = c.variety_id 
+		WHERE CHARACTER_LENGTH(t.account_code) &gt; 8
+			AND  t.first_class_account_code ='3102'	
+			AND ((LOCATE("商品",t.second_class_account_name) &gt;0 AND LOCATE("多",t.second_class_account_name) &gt;0 ) 
+				OR (LOCATE("商品",t.second_class_account_name) &gt;0 AND LOCATE("空",t.second_class_account_name) &gt;0 ) 
+				OR (LOCATE("商品",t.third_class_account_name) &gt;0 AND LOCATE("多",t.third_class_account_name) &gt;0)
+				OR (LOCATE("商品",t.third_class_account_name) &gt;0 AND LOCATE("空",t.third_class_account_name) &gt;0)
+				OR (LOCATE("投机",t.second_class_account_name) &gt;0 AND LOCATE("买",t.second_class_account_name) &gt;0)
+				OR (LOCATE("投机",t.second_class_account_name) &gt;0 AND LOCATE("卖",t.second_class_account_name) &gt;0 ) 
+				OR (LOCATE("投机",t.third_class_account_name) &gt;0 AND LOCATE("买",t.third_class_account_name) &gt;0)
+				OR (LOCATE("投机",t.third_class_account_name) &gt;0 AND LOCATE("卖",t.third_class_account_name) &gt;0)
+				OR (LOCATE("股指",t.second_class_account_name) &gt;0 AND LOCATE("多",t.second_class_account_name) &gt;0) 
+				OR (LOCATE("股指",t.second_class_account_name) &gt;0 AND LOCATE("空",t.second_class_account_name) &gt;0) 
+				OR (LOCATE("股指",t.third_class_account_name) &gt;0 AND LOCATE("多",t.third_class_account_name) &gt;0)
+				OR (LOCATE("股指",t.third_class_account_name) &gt;0 AND LOCATE("空",t.third_class_account_name) &gt;0)
+				OR (LOCATE("交易所",t.second_class_account_name) &gt;0 AND LOCATE("多",t.second_class_account_name) &gt;0) 
+				OR (LOCATE("交易所",t.second_class_account_name) &gt;0 AND LOCATE("空",t.second_class_account_name) &gt;0) 
+				OR (LOCATE("交易所",t.third_class_account_name) &gt;0 AND LOCATE("多",t.third_class_account_name) &gt;0)
+				OR (LOCATE("交易所",t.third_class_account_name) &gt;0 AND LOCATE("空",t.third_class_account_name) &gt;0)
+				OR (LOCATE("套利",t.second_class_account_name) &gt;0 AND LOCATE("多",t.second_class_account_name) &gt;0) 
+				OR (LOCATE("套利",t.second_class_account_name) &gt;0 AND LOCATE("空",t.second_class_account_name) &gt;0) 
+				OR (LOCATE("套利",t.third_class_account_name) &gt;0 AND LOCATE("多",t.third_class_account_name) &gt;0)
+				OR (LOCATE("套利",t.third_class_account_name) &gt;0 AND LOCATE("空",t.third_class_account_name) &gt;0))
+			AND (LOCATE("冲",t.second_class_account_name)=0) 
+					AND (LOCATE("冲",t.third_class_account_name)=0) 
+					AND (LOCATE("估值增值",t.second_class_account_name)=0)  
+					AND (LOCATE("估值增值",t.third_class_account_name)=0) 
+			AND t.product_id = #{productId,jdbcType=VARCHAR} 
+			AND t.date = #{date,jdbcType=VARCHAR}
+			AND t.trustee_id = #{trusteeId,jdbcType=VARCHAR}  
+			GROUP BY contact ,bs
+	</select>
+	
+	<!-- 估值表解析证券入持仓 -->
+	<select id="getSecurityPositionSummaryFromValuation" parameterType="map" resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  '2' sh,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN 0 
+		    ELSE 1 
+		  END bs,
+		  CASE
+		    WHEN t.cost &lt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0), 4) 
+		    ELSE 0 
+		  END priceSell,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0), 4) 
+		    ELSE 0 
+		  END priceBuy,
+		  #{investerId,jdbcType=VARCHAR} investerID,
+		  #{brokerId,jdbcType=VARCHAR} brokerID,
+		  t.date DATE,
+		  RIGHT(t.account_code, 6) contact,
+		  '9' dataSource,
+		  ROUND(
+		    SUM(
+		      IFNULL(t.appreciation_valuation, 0)
+		    ),
+		    4
+		  ) positionProfitMarket,
+		  NULL margin,
+		  ROUND(
+		    SUM(
+		      CASE
+		        WHEN t.cost &gt; 0 
+		        THEN amount 
+		        ELSE 0 
+		      END
+		    ),
+		    4
+		  ) positionBuy,
+		  ROUND(
+		    SUM(
+		      CASE
+		        WHEN t.cost &lt; 0 
+		        THEN amount 
+		        ELSE 0 
+		      END
+		    ),
+		    4
+		  ) positionSell,
+		  ROUND(t.market_value, 4) settlementPriceToday,
+		  NULL settlementPriceYesterday,
+		  ROUND(SUM(IFNULL(ABS(t.cost), 0)), 4) oriMargin,
+		  '2' marketType,
+		  NULL positionCost,
+		  NULL totalProfit,
+		  ROUND(
+		    SUM(
+		      IFNULL(t.market_capitalization, 0)
+		    ),
+		    4
+		  ) marketCapitalization,
+		  c.industry industry,
+		  c.stock_type stockType,
+		  c.variety_id varietyID,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate,
+		  NULL positionProfitMarket 
+		FROM
+		  t_fund_valuation_table t 
+		  LEFT JOIN t_contract c 
+		    ON c.contract = RIGHT(t.account_code, 6) 
+		    AND c.date = t.date 
+		WHERE CHARACTER_LENGTH(t.account_code) &gt; 8 
+			AND  t.first_class_account_code ='1102'	
+			AND ( LOCATE("A股成本",t.second_class_account_name)&gt;0 OR LOCATE("A股成本",t.third_class_account_name)&gt;0 
+			 OR (LOCATE("创业板",t.second_class_account_name)&gt;0 AND LOCATE("成本",t.second_class_account_name)&gt;0)
+			 OR (LOCATE("创业板",t.third_class_account_name)&gt;0 AND LOCATE("成本",t.third_class_account_name)&gt;0)
+			 OR (LOCATE("股票",t.second_class_account_name)&gt;0 AND LOCATE("成本",t.second_class_account_name)&gt;0)
+			 OR (LOCATE("股票",t.third_class_account_name)&gt;0 AND LOCATE("成本",t.third_class_account_name)&gt;0))
+		  	AND t.product_id = #{productId,jdbcType=VARCHAR} 
+			AND t.date = #{date,jdbcType=VARCHAR}
+			AND t.trustee_id = #{trusteeId,jdbcType=VARCHAR}  
+		GROUP BY contact 
+	</select>
+	
+	
+	<!-- 估值表解析债券入持仓 -->
+	<select id="getBondPositionSummaryFromValuation" parameterType="map" resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  '2' sh,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN 0 
+		    ELSE 1 
+		  END bs,
+		  CASE
+		    WHEN t.cost &lt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0), 4) 
+		    ELSE 0 
+		  END priceSell,
+		  CASE
+		    WHEN t.cost &gt; 0 
+		    THEN ROUND(IFNULL(ABS(t.unit_cost), 0), 4) 
+		    ELSE 0 
+		  END priceBuy,
+		  #{investerId,jdbcType=VARCHAR} investerID,
+		  #{brokerId,jdbcType=VARCHAR} brokerID,
+		  t.date DATE,
+		  SUBSTRING(t.account_code, 9) contact,
+		  '9' dataSource,
+		  ROUND(
+		    SUM(
+		      IFNULL(t.appreciation_valuation, 0)
+		    ),
+		    4
+		  ) positionProfitMarket,
+		  NULL margin,
+		  ROUND(
+		    SUM(
+		      CASE
+		        WHEN t.cost &gt; 0 
+		        THEN amount 
+		        ELSE 0 
+		      END
+		    ),
+		    4
+		  ) positionBuy,
+		  ROUND(
+		    SUM(
+		      CASE
+		        WHEN t.cost &lt; 0 
+		        THEN amount 
+		        ELSE 0 
+		      END
+		    ),
+		    4
+		  ) positionSell,
+		  ROUND(t.market_value, 4) settlementPriceToday,
+		  NULL settlementPriceYesterday,
+		  ROUND(SUM(IFNULL(ABS(t.cost), 0)), 4) oriMargin,
+		  '8' marketType,
+		  NULL positionCost,
+		  NULL totalProfit,
+		  ROUND(
+		    SUM(
+		      IFNULL(t.market_capitalization, 0)
+		    ),
+		    4
+		  ) marketCapitalization,
+		  c.industry industry,
+		  c.stock_type stockType,
+		  c.variety_id varietyID,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate,
+		  NULL positionProfitMarket 
+		FROM
+		  t_fund_valuation_table t 
+		  LEFT JOIN t_contract c 
+		    ON c.contract = RIGHT(t.account_code, 6) 
+		    AND c.date = t.date 
+		WHERE CHARACTER_LENGTH(t.account_code) &gt; 8 
+			AND  ((t.first_class_account_code ='1103' AND LOCATE("成本",t.third_class_account_name)&gt;0 )
+			 OR (t.first_class_account_code ='1104' AND LOCATE("成本",t.third_class_account_name)&gt;0 )
+			 OR (t.first_class_account_code ='1401' AND LOCATE("成本",t.third_class_account_name)&gt;0 )
+			 OR (t.first_class_account_code ='1521' 
+			  AND ((LOCATE("私募债券",t.third_class_account_name)&gt;0 AND LOCATE("成本",t.third_class_account_name)&gt;0)
+			     OR (LOCATE("企业债",t.third_class_account_name)&gt;0 AND LOCATE("成本",t.third_class_account_name)&gt;0)
+			     OR (LOCATE("短期融资券",t.third_class_account_name)&gt;0 AND LOCATE("成本",t.third_class_account_name)&gt;0)
+			     OR (LOCATE("超短期融资券",t.third_class_account_name)&gt;0 AND LOCATE("成本",t.third_class_account_name)&gt;0)
+			     OR (LOCATE("中期票据",t.third_class_account_name)&gt;0 AND LOCATE("成本",t.third_class_account_name)&gt;0)
+			  )
+			 )
+			)
+		  	AND t.product_id = #{productId,jdbcType=VARCHAR} 
+			AND t.date = #{date,jdbcType=VARCHAR}
+			AND t.trustee_id = #{trusteeId,jdbcType=VARCHAR}
+		GROUP BY contact
+	</select>
+</mapper>

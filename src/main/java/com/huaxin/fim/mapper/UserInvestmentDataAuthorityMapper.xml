@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.UserInvestmentDataAuthorityMapper">	
+	<!-- 获取用户投顾白名单数据（类别为机构） -->
+	<select id="getUserInvestmentByConditionForOrganization" parameterType="map" resultType="com.quantdo.iwin.entity.UserInvestmentDataAuthority">
+		SELECT 
+		  a.user_id userId,
+		  s.user_name userName,
+		  a.category category,
+		  a.item_id itemId,
+		  a.authority authority ,
+		  t.organization_name itemName,
+		  a.id id
+		FROM
+		  t_user_investment_data_authority a 
+		  LEFT JOIN sso.t_user s ON a.user_id = s.login_id
+		  left join t_organization t on t.id = a.item_id
+		WHERE a.category = #{request.category,jdbcType=VARCHAR}
+		<if test="request.itemName  != null and request.itemName != '' ">
+		  AND t.organization_name LIKE CONCAT('%',#{request.itemName,jdbcType=VARCHAR}, '%') 
+	    </if>
+	    <if test="request.userId  != null and request.userId != '' ">
+		  AND a.user_id  = #{request.userId,jdbcType=VARCHAR}
+	    </if>
+	    order by a.user_id
+	</select>
+	
+	<!-- 获取用户投顾白名单数据（类别为投顾） -->
+	<select id="getUserInvestmentByConditionForInvestment" parameterType="map" resultType="com.quantdo.iwin.entity.UserInvestmentDataAuthority">
+		SELECT 
+		  a.user_id userId,
+		  s.user_name userName,
+		  a.category category,
+		  a.item_id itemId,
+		  a.authority authority ,
+		  t.company_name itemName,
+		  a.id id
+		FROM
+		  t_user_investment_data_authority a 
+		  LEFT JOIN sso.t_user s ON a.user_id = s.login_id
+		  left join t_investment_manager t on t.id = a.item_id
+		WHERE a.category = #{request.category,jdbcType=VARCHAR}
+		<if test="request.itemName  != null and request.itemName != '' ">
+		  AND t.company_name LIKE CONCAT('%',#{request.itemName,jdbcType=VARCHAR}, '%') 
+	    </if>
+	    <if test="request.userId  != null and request.userId != '' ">
+		  AND a.user_id  = #{request.userId,jdbcType=VARCHAR}
+	    </if>
+	     order by a.user_id
+	</select>
+		  
+	<!-- 获取用户投顾白名单数据（类别为用户） -->
+	<select id="getUserInvestmentByConditionForUser" parameterType="map" resultType="com.quantdo.iwin.entity.UserInvestmentDataAuthority">
+		SELECT 
+		  a.user_id userId,
+		  s.user_name userName,
+		  a.category category,
+		  a.item_id itemId,
+		  a.authority authority,
+		  u.user_name itemName,
+		  a.id id
+		FROM
+		  t_user_investment_data_authority a 
+		  LEFT JOIN sso.t_user s ON a.user_id = s.login_id
+		  LEFT JOIN sso.t_user u ON a.item_id = u.login_id
+		WHERE a.category = #{request.category,jdbcType=VARCHAR}
+		<if test="request.itemName  != null and request.itemName != '' ">
+		  AND u.user_name LIKE CONCAT('%',#{request.itemName,jdbcType=VARCHAR}, '%') 
+	    </if>
+		<if test="request.userId  != null and request.userId != '' ">
+		  AND a.user_id  = #{request.userId,jdbcType=VARCHAR}
+	    </if>
+	     order by a.user_id
+	</select>
+		
+</mapper>

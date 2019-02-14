@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.VarietySummaryMapper">
+
+	  <select id="getVarietySummary" parameterType="map"
+				resultType="com.quantdo.iwin.entity.VarietySummary">
+	  SELECT
+		  t.date DATE,
+		  t.invester_id investerID,
+		  t.broker_id  brokerID,
+		  t.variety_id varietyID,
+		  SUM(IFNULL(t.lots, 0)) lots,
+		  SUM(IFNULL(t.turnover, 0)) turnover,
+		  SUM(IFNULL(t.commission, 0)) commission,
+		  SUM(t.close_profit) closeProfit,
+		  SUM(t.close_profit_hedge) closeProfitHedge
+		  FROM
+		  t_transaction_summary t
+		  WHERE  1=1
+		  <if test="transactionSummary.date  != null and transactionSummary.date != '' ">
+			  AND t.date  =#{transactionSummary.date ,jdbcType=VARCHAR}
+		  </if>
+		  <if test="transactionSummary.dataSource  != null and transactionSummary.dataSource != '' ">
+			  AND t.data_source = #{transactionSummary.dataSource ,jdbcType=VARCHAR}
+		  </if>
+		  <if test="transactionSummary.investerID  != null and transactionSummary.investerID != '' ">
+			  AND t.invester_id = #{transactionSummary.investerID ,jdbcType=VARCHAR}
+		  </if>
+		  GROUP BY t.variety_id,t.`invester_id`,t.`broker_id`,t.`date`
+	</select>
+
+</mapper>

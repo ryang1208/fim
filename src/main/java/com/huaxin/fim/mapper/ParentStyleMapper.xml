@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ParentStyleMapper">
+		
+	<!-- 子基胜率-->
+	<select id="getAvergeYield" parameterType="map" resultType="com.quantdo.iwin.response.ParentStyleAnalysisResponse">
+		SELECT t.product_id productId, t.date date, ROUND(AVG(t.today),4) avgYieldRate,p.product_name productName 
+		    FROM t_product_period_kpi_statistics t			
+			left join t_product p
+		    on t.product_id = p.id
+		WHERE t.product_id IN 
+			<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+	            #{id}
+	   		</foreach>
+		    <if test="request.beginDate != null and request.beginDate != ''">
+		 		AND t.date &gt;= #{request.beginDate,jdbcType=VARCHAR}  
+		  	</if>
+		  	<if test="request.endDate != null and request.endDate != ''">
+			 	AND t.date &lt;=#{request.endDate,jdbcType=VARCHAR} 
+		  	</if>
+			 	AND t.KPI ='020032'
+			GROUP BY t.product_id
+		  	ORDER BY t.date DESC
+	</select>
+	<!-- 子基胜率-->
+	<select id="getWinRatioValue" parameterType="map" resultType="com.quantdo.iwin.response.ParentStyleAnalysisResponse">
+		SELECT t.product_id productId,
+			CASE 
+			WHEN #{periodType,jdbcType=VARCHAR} ='0' THEN t.until_now
+			WHEN #{periodType,jdbcType=VARCHAR} ='1' THEN t.one_month 
+			WHEN #{periodType,jdbcType=VARCHAR} ='2' THEN t.three_month
+			WHEN #{periodType,jdbcType=VARCHAR} ='3' THEN t.six_month
+			WHEN #{periodType,jdbcType=VARCHAR} ='4' THEN t.one_year
+			ELSE t.this_year END AS winValue
+			FROM t_product_period_kpi_statistics t WHERE t.KPI='030146' 
+			AND t.product_id = #{productId,jdbcType=VARCHAR}
+			ORDER BY t.date DESC LIMIT 1
+	</select>
+	<!-- 子基择时选股能力-->
+	<select id="getTMModelValue" parameterType="map" resultType="com.quantdo.iwin.response.ParentStyleAnalysisResponse">
+		SELECT t.product_id productId, t.date date, t.value alphaValue,n.value timingValue,p.product_name productName 
+		    FROM t_product_index_period_kpi_statistics t 
+			LEFT JOIN (SELECT t.product_id,t.value FROM t_product_index_period_kpi_statistics t 
+			WHERE t.KPI=#{request.relationKpi,jdbcType=VARCHAR} 
+			AND t.period_type = '6' 
+			AND t.index_id = #{request.indexID,jdbcType=VARCHAR}
+            AND t.date = #{request.beginDate,jdbcType=VARCHAR}) n
+			ON t.product_id=n.product_id
+			left join t_product p
+		    on t.product_id = p.id
+		WHERE t.product_id IN 
+			<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+	            #{id}
+	   		</foreach>
+			 	AND t.KPI = #{request.kpiCode,jdbcType=VARCHAR} 
+			 	AND t.period_type = '6' 
+				AND t.index_id = #{request.indexID,jdbcType=VARCHAR}
+			 	AND t.date =#{request.beginDate,jdbcType=VARCHAR}
+			GROUP BY t.product_id
+		  	ORDER BY t.date DESC 
+	</select>	
+</mapper>

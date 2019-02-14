@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProfitAndLossAnalysisStatisticsMapper">
+	
+	<!-- 累计盈亏分析 -->
+	<select id="getProfitAndLossList" parameterType="map" resultType="com.quantdo.iwin.response.ProfitAndLossResponse">
+		SELECT 
+		  ELT(
+		    INTERVAL (
+		          t.today,
+	          temp.minValue,
+		      temp.minValue + temp.step * 1,
+		      temp.minValue + temp.step * 2,
+		      temp.minValue + temp.step * 3,
+		      temp.minValue + temp.step * 4,
+		      temp.minValue + temp.step * 5,
+		      temp.minValue + temp.step * 6,
+		      temp.minValue + temp.step * 7,
+		      temp.minValue + temp.step * 8,
+		      temp.minValue + temp.step * 9,
+		      temp.minValue + temp.step * 10,
+		      temp.minValue + temp.step * 11,
+		      temp.minValue + temp.step * 12,
+		      temp.minValue + temp.step * 13,
+		      temp.minValue + temp.step * 14,
+		      temp.minValue + temp.step * 15,
+		      temp.minValue + temp.step * 16,
+		      temp.minValue + temp.step * 17,
+		      temp.minValue + temp.step * 18,
+		      temp.minValue + temp.step * 19,
+		      temp.minValue + temp.step * 21
+		    ),
+		    CONCAT(
+		      "a/",
+		      ROUND(temp.minValue * 100, 3),
+		      "%" "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 1) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "b/",
+		      ROUND((temp.minValue + temp.step) * 100, 3),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 2) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "c/",
+		      ROUND(
+		        (temp.minValue + temp.step * 2) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 3) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "d/",
+		      ROUND(
+		        (temp.minValue + temp.step * 3) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 4) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "e/",
+		      ROUND(
+		        (temp.minValue + temp.step * 4) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 5) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "f/",
+		      ROUND(
+		        (temp.minValue + temp.step * 5) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 6) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "g/",
+		      ROUND(
+		        (temp.minValue + temp.step * 6) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 7) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "h/",
+		      ROUND(
+		        (temp.minValue + temp.step * 7) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 8) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "i/",
+		      ROUND(
+		        (temp.minValue + temp.step * 8) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 9) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "j/",
+		      ROUND(
+		        (temp.minValue + temp.step * 9) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 10) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "k/",
+		      ROUND(
+		        (temp.minValue + temp.step * 10) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 11) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "l/",
+		      ROUND(
+		        (temp.minValue + temp.step * 11) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 12) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "m/",
+		      ROUND(
+		        (temp.minValue + temp.step * 12) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 13) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "n/",
+		      ROUND(
+		        (temp.minValue + temp.step * 13) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 14) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "o/",
+		      ROUND(
+		        (temp.minValue + temp.step * 14) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 15) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "p/",
+		      ROUND(
+		        (temp.minValue + temp.step * 15) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 16) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "q/",
+		      ROUND(
+		        (temp.minValue + temp.step * 16) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 17) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "r/",
+		      ROUND(
+		        (temp.minValue + temp.step * 17) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 18) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "s/",
+		      ROUND(
+		        (temp.minValue + temp.step * 18) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 19) * 100,
+		        3
+		      ),
+		      "%"
+		    ),
+		    CONCAT(
+		      "t/",
+		      ROUND(
+		        (temp.minValue + temp.step * 19) * 100,
+		        3
+		      ),
+		      "%",
+		      "~",
+		      ROUND(
+		        (temp.minValue + temp.step * 20) * 100,
+		        3
+		      ),
+		      "%"
+		    )
+		  ) LEVEL,
+		  COUNT(t.date) days
+		FROM
+		  t_product_period_kpi_statistics t 
+		  INNER JOIN 
+		    (SELECT 
+		        (
+		          ABS(MAX(
+			          t1.today
+		          )) + ABS(MIN(
+			          t1.today
+		          ))
+		        ) / 20 step,
+		       MIN(
+			          t1.today
+		       ) minValue,
+		      t1.product_id ,
+		      t1.kpi
+		    FROM
+		      t_product_period_kpi_statistics t1
+		    where 1=1
+			     <if test="profitAndLossRequest.kpiCode != null and profitAndLossRequest.kpiCode !=''">
+		          	and	t1.kpi = #{profitAndLossRequest.kpiCode,jdbcType=VARCHAR}
+	          	 </if>
+	          	 <if test="profitAndLossRequest.productId != null and profitAndLossRequest.productId !=''">
+		          	and	t1.product_id = #{profitAndLossRequest.productId,jdbcType=VARCHAR}
+	          	 </if>
+	          	  <if test="profitAndLossRequest.beginDate != null and profitAndLossRequest.beginDate !=''">
+		          	and	t1.date &gt;= #{profitAndLossRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="profitAndLossRequest.endDate != null and profitAndLossRequest.endDate !=''">
+		          	and	t1.date &lt;= #{profitAndLossRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+          	 ) temp 
+		    ON t.product_id = temp.product_id and t.kpi=temp.kpi
+		  where 1=1
+		  <if test="profitAndLossRequest != null">
+		 	 <if test="profitAndLossRequest.kpiCode != null and profitAndLossRequest.kpiCode !=''">
+	          	and	t.kpi = #{profitAndLossRequest.kpiCode,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="profitAndLossRequest.productId != null and profitAndLossRequest.productId !=''">
+	          	and	t.product_id = #{profitAndLossRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="profitAndLossRequest.beginDate != null and profitAndLossRequest.beginDate !=''">
+	          	and	t.date &gt;= #{profitAndLossRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="profitAndLossRequest.endDate != null and profitAndLossRequest.endDate !=''">
+	          	and	t.date &lt;= #{profitAndLossRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+	          and t.today is not null
+          </if>
+		GROUP BY LEVEL 	
+	</select>
+
+	<!-- 累计盈利及累计亏损 -->
+	<select id="getTotalYieldOrLoss" parameterType="map" resultType="com.quantdo.iwin.response.TotalYieldAndLossResponse">
+		SELECT 
+		  t.date,
+		  t.until_now  amount
+		FROM
+		  t_product_period_kpi_statistics t 
+		WHERE 1=1
+		<if test="profitAndLossRequest != null">
+			 and t.KPI = #{profitAndLossRequest.kpiCode,jdbcType=VARCHAR}
+		  	 <if test="profitAndLossRequest.beginDate != null and profitAndLossRequest.beginDate !=''">
+	          	and	t.date &gt;= #{profitAndLossRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="profitAndLossRequest.endDate != null and profitAndLossRequest.endDate !=''">
+	          	and	t.date &lt;= #{profitAndLossRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+          	 <if test="profitAndLossRequest.productId != null and profitAndLossRequest.productId !=''">
+	          	and	t.product_id = #{profitAndLossRequest.productId,jdbcType=VARCHAR}
+          	 </if>
+		  </if>
+  </select>
+</mapper>

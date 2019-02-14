@@ -1,0 +1,908 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.FundSearchMapper">
+	
+	<select id="getFundList" parameterType="map" resultType="com.quantdo.iwin.response.FundSearchResponse">
+		SELECT 
+		  p.id productId,
+		  p.product_code productCode,
+		  p.product_name productName,
+		  p.product_short_name productShortName,
+		  IFNULL(p.strategy_list, '') strategyList,
+		  p.fund_trustee fundTrustee,
+		  p.fund_manager fundManager,
+		  p.initial_asset initialAsset,
+		  p.create_date createDate,
+		  p.product_status productStatus,
+		  FORMAT(t5.until_now, 4) riskReturnRatio,
+		  FORMAT(p.newest_net_value, 2) netNewestValue,
+		  FORMAT(t2.until_now * 100, 2) maxDrawDown,
+		  FORMAT(p.newest_net_value, 2) netAccumulativeValue,
+		  FORMAT(t1.today * 100, 2) today,
+		  FORMAT(t1.one_month * 100, 2) oneMonth,
+		  FORMAT(t1.three_month * 100, 2) threeMonth,
+		  FORMAT(t1.six_month * 100, 2) sixMonth,
+		  FORMAT(t1.one_year * 100, 2) oneYear, 
+		  FORMAT(t1.until_now * 100, 2) untilNow,
+		  FORMAT(t1.this_year * 100, 2) thisYear,
+		  FORMAT(t2.today * 100, 2) todayDrawDown,
+		  FORMAT(t2.one_month * 100, 2) oneMonthDrawDown,
+		  FORMAT(t2.three_month * 100, 2) threeMonthDrawDown,
+		  FORMAT(t2.six_month * 100, 2) sixMonthDrawDown,
+		  FORMAT(t2.one_year * 100, 2) oneYearDrawDown,
+		  FORMAT(t2.until_now * 100, 2) untilNowDrawDown,
+		  FORMAT(t2.this_year * 100, 2) thisYearDrawDown,
+		  FORMAT(t3.today * 100, 2) todaySharpRatio,
+		  FORMAT(t3.one_month * 100, 2) oneMonthSharpRatio,
+		  FORMAT(t3.three_month * 100, 2) threeMonthSharpRatio,
+		  FORMAT(t3.six_month * 100, 2) sixMonthSharpRatio,
+		  FORMAT(t3.one_year * 100, 2) oneYearSharpRatio,
+		  FORMAT(t3.until_now * 100, 2) untilNowSharpRatio,
+		  FORMAT(t3.this_year * 100, 2) thisYearSharpRatio,
+		  FORMAT(t4.today * 100, 2) todayCalmarRatio,
+		  FORMAT(t4.one_month * 100, 2) oneMonthCalmarRatio,
+		  FORMAT(t4.three_month * 100, 2) threeMonthCalmarRatio,
+		  FORMAT(t4.six_month * 100, 2) sixMonthCalmarRatio,
+		  FORMAT(t4.one_year * 100, 2) oneYearCalmarRatio,
+		  FORMAT(t4.until_now * 100, 2) untilNowCalmarRatio,
+		  FORMAT(t4.this_year * 100, 2) thisYearCalmarRatio,
+		  IFNULL(
+		    focus_fund.attention_statu,
+		    'false'
+		  ) attentionStatu,
+		  p.newest_net_value_date xDate,
+		  p.newest_net_value_update_date xupdateDate,
+		  p.newest_net_value_data_source xdataSource,
+		  p.newest_settlement_sheet_update_date deliveryDate,
+		  p.newest_settlement_sheet_data_source deliverySource,
+		  p.is_parent_product isParentProduct
+		FROM
+		  (SELECT p.id ,
+		  p.product_code ,
+		  p.product_name ,
+		  p.product_short_name ,
+		  p.strategy_list ,
+		  p.fund_trustee ,
+		  p.fund_manager ,
+		  p.initial_asset ,
+		  p.create_date ,
+		  p.product_status ,
+		  p.is_independent,
+		  p.is_parent_product,
+		  p.product_type,
+		  p.newest_net_value_update_date,
+		  p.newest_net_value_date,
+		  p.newest_net_value_data_source,
+		  p.newest_net_value,
+		  p.newest_settlement_sheet_update_date,
+		  p.newest_settlement_sheet_date,
+		  p.newest_settlement_sheet_data_source,
+		  p.investment_id
+		  FROM
+		  t_product p
+		  WHERE p.product_status &lt; 3
+		  ) p 
+		  LEFT JOIN (select id,company_name from t_investment_manager m )m on p.investment_id = m.id
+		  LEFT JOIN 
+		    (SELECT 
+		      p.id,
+		      'true' attention_statu 
+		    FROM
+		      t_product p,
+		      t_user_product_follow t 
+		    WHERE p.id = t.product_id    
+		     <if test="fundSearch != null">
+			  	 <if test="fundSearch.userId != null and fundSearch.userId !=''">
+				       AND t.login_id = #{fundSearch.userId,jdbcType=VARCHAR}  
+				 </if>
+			  </if>
+		    GROUP BY p.id,
+		      attention_statu) focus_fund 
+		    ON p.id = focus_fund.id 
+		  LEFT JOIN 
+		    (SELECT product_id,
+				SUM(today) today,
+				SUM(one_month) one_month,
+				SUM(one_year) one_year,
+				SUM(six_month) six_month,
+				SUM(this_year) this_year,
+				SUM(three_month) three_month,
+				SUM(until_now) until_now 
+				FROM (
+				SELECT product_id,
+			      0 today,
+			      (CASE WHEN period_type = 1 THEN VALUE ELSE 0 END ) one_month,
+			      (CASE WHEN period_type = 4 THEN VALUE ELSE 0 END ) one_year,
+			      (CASE WHEN period_type = 3 THEN VALUE ELSE 0 END ) six_month,
+			      (CASE WHEN period_type = 5 THEN VALUE ELSE 0 END ) this_year,
+			      (CASE WHEN period_type = 2 THEN VALUE ELSE 0 END ) three_month,
+			      (CASE WHEN period_type = 0 THEN VALUE ELSE 0 END ) until_now 
+			    FROM t_product_period_statistics a 
+			    WHERE KPI = '020032')base
+		    GROUP BY product_id) t1 
+		    ON t1.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT product_id,
+				SUM(today) today,
+				SUM(one_month) one_month,
+				SUM(one_year) one_year,
+				SUM(six_month) six_month,
+				SUM(this_year) this_year,
+				SUM(three_month) three_month,
+				SUM(until_now) until_now 
+				FROM (
+				SELECT product_id,
+			      0 today,
+			      (CASE WHEN period_type = 1 THEN abs(VALUE) ELSE 0 END ) one_month,
+			      (CASE WHEN period_type = 4 THEN abs(VALUE) ELSE 0 END ) one_year,
+			      (CASE WHEN period_type = 3 THEN abs(VALUE) ELSE 0 END ) six_month,
+			      (CASE WHEN period_type = 5 THEN abs(VALUE) ELSE 0 END ) this_year,
+			      (CASE WHEN period_type = 2 THEN abs(VALUE) ELSE 0 END ) three_month,
+			      (CASE WHEN period_type = 0 THEN abs(VALUE) ELSE 0 END ) until_now 
+			    FROM t_product_period_statistics a 
+			    WHERE KPI = '040006')base
+		    GROUP BY product_id) t2 
+		    ON t2.product_id = p.id
+		    LEFT JOIN 
+		    (SELECT product_id,
+				SUM(today) today,
+				SUM(one_month) one_month,
+				SUM(one_year) one_year,
+				SUM(six_month) six_month,
+				SUM(this_year) this_year,
+				SUM(three_month) three_month,
+				SUM(until_now) until_now 
+				FROM (
+				SELECT product_id,
+			      0 today,
+			      (CASE WHEN period_type = 1 THEN VALUE ELSE 0 END ) one_month,
+			      (CASE WHEN period_type = 4 THEN VALUE ELSE 0 END ) one_year,
+			      (CASE WHEN period_type = 3 THEN VALUE ELSE 0 END ) six_month,
+			      (CASE WHEN period_type = 5 THEN VALUE ELSE 0 END ) this_year,
+			      (CASE WHEN period_type = 2 THEN VALUE ELSE 0 END ) three_month,
+			      (CASE WHEN period_type = 0 THEN VALUE ELSE 0 END ) until_now 
+			    FROM t_product_period_statistics a 
+			    WHERE KPI = '030007')base
+		    GROUP BY product_id) t3 
+		    ON t3.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT product_id,
+				SUM(today) today,
+				SUM(one_month) one_month,
+				SUM(one_year) one_year,
+				SUM(six_month) six_month,
+				SUM(this_year) this_year,
+				SUM(three_month) three_month,
+				SUM(until_now) until_now 
+				FROM (
+				SELECT product_id,
+			      0 today,
+			      (CASE WHEN period_type = 1 THEN VALUE ELSE 0 END ) one_month,
+			      (CASE WHEN period_type = 4 THEN VALUE ELSE 0 END ) one_year,
+			      (CASE WHEN period_type = 3 THEN VALUE ELSE 0 END ) six_month,
+			      (CASE WHEN period_type = 5 THEN VALUE ELSE 0 END ) this_year,
+			      (CASE WHEN period_type = 2 THEN VALUE ELSE 0 END ) three_month,
+			      (CASE WHEN period_type = 0 THEN VALUE ELSE 0 END ) until_now 
+			    FROM t_product_period_statistics a 
+			    WHERE KPI ='030014')base
+		    GROUP BY product_id) t4 
+		    ON t4.product_id = p.id 
+		   LEFT JOIN 
+		    (SELECT product_id,
+                SUM(today) today,
+                SUM(one_month) one_month,
+                SUM(one_year) one_year,
+                SUM(six_month) six_month,
+                SUM(this_year) this_year,
+                SUM(three_month) three_month,
+                SUM(until_now) until_now 
+                FROM (
+                SELECT product_id,
+                  0 today,
+                  (CASE WHEN period_type = 1 THEN VALUE ELSE 0 END ) one_month,
+                  (CASE WHEN period_type = 4 THEN VALUE ELSE 0 END ) one_year,
+                  (CASE WHEN period_type = 3 THEN VALUE ELSE 0 END ) six_month,
+                  (CASE WHEN period_type = 5 THEN VALUE ELSE 0 END ) this_year,
+                  (CASE WHEN period_type = 2 THEN VALUE ELSE 0 END ) three_month,
+                  (CASE WHEN period_type = 0 THEN VALUE ELSE 0 END ) until_now 
+                FROM t_product_period_statistics a 
+                WHERE KPI = '040009')base
+            GROUP BY product_id) t5 
+		    ON t5.product_id = p.id
+		WHERE 1 = 1 
+		 and p.product_status &lt; 3
+		<if test="fundSearch != null">
+			<if test="fundSearch.keyWords != null and fundSearch.keyWords !='' and fundSearch.keyValue != null and fundSearch.keyValue !='' ">
+			     <if test="fundSearch.keyWords == 1">
+			          and m.company_name like  CONCAT('%',#{fundSearch.keyValue,jdbcType=VARCHAR}, '%')  
+			     </if>
+			     <if test="fundSearch.keyWords == 2">
+			         and p.product_name like  CONCAT('%',#{fundSearch.keyValue,jdbcType=VARCHAR}, '%')  
+			     </if>
+			     <if test="fundSearch.keyWords == 3">
+			         and p.fund_manager like  CONCAT('%',#{fundSearch.keyValue,jdbcType=VARCHAR}, '%')  
+			     </if>
+			</if>
+			<!-- 收益率  -->
+			<if test="fundSearch.yieldRatio != null and fundSearch.yieldRatio !='' ">
+				<!-- 收益率成立以来 -->
+                <if test="fundSearch.yieldRatio == 0 and fundSearch.yieldRatioBegin != null and fundSearch.yieldRatioBegin != ''">
+                    and t1.until_now &gt;= #{fundSearch.yieldRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 0 and fundSearch.yieldRatioEnd != null and fundSearch.yieldRatioEnd != ''">
+                    and t1.until_now &lt;= #{fundSearch.yieldRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近一月 -->
+                <if test="fundSearch.yieldRatio == 1 and fundSearch.yieldRatioBegin != null and fundSearch.yieldRatioBegin != ''">
+                    and t1.one_month &gt;= #{fundSearch.yieldRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 1 and fundSearch.yieldRatioEnd != null and fundSearch.yieldRatioEnd != ''">
+                    and t1.one_month &lt;= #{fundSearch.yieldRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近三月 -->
+                <if test="fundSearch.yieldRatio == 2 and fundSearch.yieldRatioBegin != null and fundSearch.yieldRatioBegin != ''">
+                    and t1.three_month &gt;= #{fundSearch.yieldRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 2 and fundSearch.yieldRatioEnd != null and fundSearch.yieldRatioEnd != ''">
+                    and t1.three_month &lt;= #{fundSearch.yieldRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近6月 -->
+                <if test="fundSearch.yieldRatio == 3 and fundSearch.yieldRatioBegin != null and fundSearch.yieldRatioBegin != ''">
+                    and t1.six_month &gt;= #{fundSearch.yieldRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 3 and fundSearch.yieldRatioEnd != null and fundSearch.yieldRatioEnd != ''">
+                    and t1.six_month &lt;= #{fundSearch.yieldRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近一年 -->
+                <if test="fundSearch.yieldRatio == 4 and fundSearch.yieldRatioBegin != null and fundSearch.yieldRatioBegin != ''">
+                    and t1.one_year &gt;= #{fundSearch.yieldRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 4 and fundSearch.yieldRatioEnd != null and fundSearch.yieldRatioEnd != ''">
+                    and t1.one_year &lt;= #{fundSearch.yieldRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 今年以来 -->
+                <if test="fundSearch.yieldRatio == 5 and fundSearch.yieldRatioBegin != null and fundSearch.yieldRatioBegin != ''">
+                    and t1.this_year &gt;= #{fundSearch.yieldRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == '5' and fundSearch.yieldRatioEnd != null and fundSearch.yieldRatioEnd != ''">
+                    and t1.this_year &lt;= #{fundSearch.yieldRatioEnd,jdbcType=VARCHAR}
+                </if>
+            </if>
+            
+            <!-- 回撤率  -->
+            <if test="fundSearch.drawDownRatio != null and fundSearch.drawDownRatio !='' ">
+                <!-- 成立以来 -->
+                <if test="fundSearch.drawDownRatio == 0 and fundSearch.drawDownRatioBegin != null and fundSearch.drawDownRatioBegin != ''">
+                    and t2.until_now &gt;= #{fundSearch.drawDownRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 0 and fundSearch.drawDownRatioEnd != null and fundSearch.drawDownRatioEnd != ''">
+                    and t2.until_now &lt;= #{fundSearch.drawDownRatioEnd,jdbcType=VARCHAR}
+                </if>
+                
+                <!-- 收益率近一月 -->
+                <if test="fundSearch.drawDownRatio == 1 and fundSearch.drawDownRatioBegin != null and fundSearch.drawDownRatioBegin != ''">
+                    and t2.one_month &gt;= #{fundSearch.drawDownRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 1 and fundSearch.drawDownRatioEnd != null and fundSearch.drawDownRatioEnd != ''">
+                    and t2.one_month &lt;= #{fundSearch.drawDownRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近三月 -->
+                <if test="fundSearch.drawDownRatio == 2 and fundSearch.drawDownRatioBegin != null and fundSearch.drawDownRatioBegin != ''">
+                    and t2.three_month &gt;= #{fundSearch.drawDownRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 2 and fundSearch.drawDownRatioEnd != null and fundSearch.drawDownRatioEnd != ''">
+                    and t2.three_month &lt;= #{fundSearch.drawDownRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近6月 -->
+                <if test="fundSearch.drawDownRatio == 3 and fundSearch.drawDownRatioBegin != null and fundSearch.drawDownRatioBegin != ''">
+                    and t2.six_month &gt;= #{fundSearch.drawDownRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 3 and fundSearch.drawDownRatioEnd != null and fundSearch.drawDownRatioEnd != ''">
+                    and t2.six_month &lt;= #{fundSearch.drawDownRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近一年 -->
+                <if test="fundSearch.drawDownRatio == 4 and fundSearch.drawDownRatioBegin != null and fundSearch.drawDownRatioBegin != ''">
+                    and t2.one_year &gt;= #{fundSearch.drawDownRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 4 and fundSearch.drawDownRatioEnd != null and fundSearch.drawDownRatioEnd != ''">
+                    and t2.one_year &lt;= #{fundSearch.drawDownRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 今年以来 -->
+                <if test="fundSearch.drawDownRatio == 5 and fundSearch.drawDownRatioBegin != null and fundSearch.drawDownRatioBegin != ''">
+                    and t2.this_year &gt;= #{fundSearch.drawDownRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.yieldRatio == 5 and fundSearch.drawDownRatioEnd != null and fundSearch.drawDownRatioEnd != ''">
+                    and t2.this_year &lt;= #{fundSearch.drawDownRatioEnd,jdbcType=VARCHAR}
+                </if>
+            </if>
+            <!-- sharp比率 -->
+	        <if test="fundSearch.sharpRatio != null and fundSearch.sharpRatio !='' ">
+				<!-- 收益率成立以来 -->
+	               <if test="fundSearch.sharpRatio == 0 and fundSearch.sharpRatioBegin != null and fundSearch.sharpRatioBegin != ''">
+	                   and t3.until_now &gt;= #{fundSearch.sharpRatioBegin,jdbcType=VARCHAR}
+	               </if>
+	               <if test="fundSearch.sharpRatio == 0 and fundSearch.sharpRatioEnd != null and fundSearch.sharpRatioEnd != ''">
+	                   and t3.until_now &lt;= #{fundSearch.sharpRatioEnd,jdbcType=VARCHAR}
+	               </if>
+	               <!-- 收益率近一月 -->
+	               <if test="fundSearch.sharpRatio == 1 and fundSearch.sharpRatioBegin != null and fundSearch.sharpRatioBegin != ''">
+	                   and t3.one_month &gt;= #{fundSearch.sharpRatioBegin,jdbcType=VARCHAR}
+	               </if>
+	               <if test="fundSearch.sharpRatio == 1 and fundSearch.sharpRatioEnd != null and fundSearch.sharpRatioEnd != ''">
+	                   and t3.one_month &lt;= #{fundSearch.sharpRatioEnd,jdbcType=VARCHAR}
+	               </if>
+	               <!-- 收益率近三月 -->
+	               <if test="fundSearch.sharpRatio == 2 and fundSearch.sharpRatioBegin != null and fundSearch.sharpRatioBegin != ''">
+	                   and t3.three_month &gt;= #{fundSearch.sharpRatioBegin,jdbcType=VARCHAR}
+	               </if>
+	               <if test="fundSearch.sharpRatio == 2 and fundSearch.sharpRatioEnd != null and fundSearch.sharpRatioEnd != ''">
+	                   and t3 .three_month &lt;= #{fundSearch.sharpRatioEnd,jdbcType=VARCHAR}
+	               </if>
+	               <!-- 收益率近6月 -->
+	               <if test="fundSearch.sharpRatio == 3 and fundSearch.sharpRatioBegin != null and fundSearch.sharpRatioBegin != ''">
+	                   and t3.six_month &gt;= #{fundSearch.sharpRatioBegin,jdbcType=VARCHAR}
+	               </if>
+	               <if test="fundSearch.sharpRatio == 3 and fundSearch.sharpRatioEnd != null and fundSearch.sharpRatioEnd != ''">
+	                   and t3.six_month &lt;= #{fundSearch.sharpRatioEnd,jdbcType=VARCHAR}
+	               </if>
+	               <!-- 收益率近一年 -->
+	               <if test="fundSearch.sharpRatio == 4 and fundSearch.sharpRatioBegin != null and fundSearch.sharpRatioBegin != ''">
+	                   and t3.one_year &gt;= #{fundSearch.sharpRatioBegin,jdbcType=VARCHAR}
+	               </if>
+	               <if test="fundSearch.sharpRatio == 4 and fundSearch.sharpRatioEnd != null and fundSearch.sharpRatioEnd != ''">
+	                   and t3.one_year &lt;= #{fundSearch.sharpRatioEnd,jdbcType=VARCHAR}
+	               </if>
+	               <!-- 今年以来 -->
+	               <if test="fundSearch.sharpRatio == 5 and fundSearch.sharpRatioBegin != null and fundSearch.sharpRatioBegin != ''">
+	                   and t3.this_year &gt;= #{fundSearch.sharpRatioBegin,jdbcType=VARCHAR}
+	               </if>
+	               <if test="fundSearch.sharpRatio == '5' and fundSearch.sharpRatioEnd != null and fundSearch.sharpRatioEnd != ''">
+	                   and t3.this_year &lt;= #{fundSearch.sharpRatioEnd,jdbcType=VARCHAR}
+	               </if>
+	        </if>
+            <!-- 卡玛比率 -->
+           <if test="fundSearch.calmaRatio != null and fundSearch.calmaRatio !='' ">
+				<!-- 收益率成立以来 -->
+                <if test="fundSearch.calmaRatio == 0 and fundSearch.calmaRatioBegin != null and fundSearch.calmaRatioBegin != ''">
+                    and t4.until_now &gt;= #{fundSearch.calmaRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.calmaRatio == 0 and fundSearch.calmaRatioEnd != null and fundSearch.calmaRatioEnd != ''">
+                    and t4.until_now &lt;= #{fundSearch.calmaRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近一月 -->
+                <if test="fundSearch.calmaRatio == 1 and fundSearch.calmaRatioBegin != null and fundSearch.calmaRatioBegin != ''">
+                    and t4.one_month &gt;= #{fundSearch.calmaRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.calmaRatio == 1 and fundSearch.calmaRatioEnd != null and fundSearch.calmaRatioEnd != ''">
+                    and t4.one_month &lt;= #{fundSearch.calmaRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近三月 -->
+                <if test="fundSearch.calmaRatio == 2 and fundSearch.calmaRatioBegin != null and fundSearch.calmaRatioBegin != ''">
+                    and t4.three_month &gt;= #{fundSearch.calmaRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.calmaRatio == 2 and fundSearch.calmaRatioEnd != null and fundSearch.calmaRatioEnd != ''">
+                    and t4.three_month &lt;= #{fundSearch.calmaRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近6月 -->
+                <if test="fundSearch.calmaRatio == 3 and fundSearch.calmaRatioBegin != null and fundSearch.calmaRatioBegin != ''">
+                    and t4.six_month &gt;= #{fundSearch.calmaRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.calmaRatio == 3 and fundSearch.calmaRatioEnd != null and fundSearch.calmaRatioEnd != ''">
+                    and t4.six_month &lt;= #{fundSearch.calmaRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 收益率近一年 -->
+                <if test="fundSearch.calmaRatio == 4 and fundSearch.calmaRatioBegin != null and fundSearch.calmaRatioBegin != ''">
+                    and t4.one_year &gt;= #{fundSearch.calmaRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.calmaRatio == 4 and fundSearch.calmaRatioEnd != null and fundSearch.calmaRatioEnd != ''">
+                    and t4.one_year &lt;= #{fundSearch.calmaRatioEnd,jdbcType=VARCHAR}
+                </if>
+                <!-- 今年以来 -->
+                <if test="fundSearch.calmaRatio == 5 and fundSearch.calmaRatioBegin != null and fundSearch.calmaRatioBegin != ''">
+                    and t4.this_year &gt;= #{fundSearch.calmaRatioBegin,jdbcType=VARCHAR}
+                </if>
+                <if test="fundSearch.calmaRatio == '5' and fundSearch.calmaRatioEnd != null and fundSearch.calmaRatioEnd != ''">
+                    and t4.this_year &lt;= #{fundSearch.calmaRatioEnd,jdbcType=VARCHAR}
+                </if>
+            </if>
+            <!-- 风报比  -->
+            <if test="fundSearch.riskReturnRatioBegin != null and fundSearch.riskReturnRatioBegin != ''">
+                and t5.until_now &gt;= #{fundSearch.riskReturnRatioBegin,jdbcType=VARCHAR}
+            </if>
+            <if test="fundSearch.riskReturnRatioEnd != null and fundSearch.riskReturnRatioEnd != ''">
+                and t5.until_now &lt;= #{fundSearch.riskReturnRatioEnd,jdbcType=VARCHAR}
+            </if>
+			<if test="fundSearch.initialAssetList != null ">
+				AND 
+				<foreach open="(" separator=" or " close=")" item="item" index="index" collection="fundSearch.initialAssetList">
+					<if test="item.begin != null">
+						(p.initial_asset &gt;=#{item.begin} ) 
+					</if>
+					<if test="item.end != null">
+						AND (p.initial_asset &lt;#{item.end})
+					</if>
+				</foreach>
+			</if>
+			<!-- 产品状态 -->
+			<if test="fundSearch.productStatus != null and fundSearch.productStatus != ''">
+				AND
+				<foreach open="(" separator=" or " close=")" item="item" index="index" collection="fundSearch.productStatus">
+					(CONCAT(',',CONCAT_WS(',',p.product_status),',') like CONCAT("%,",#{item},",%")) 
+				</foreach>
+			</if>
+            <!-- 投资策略  -->
+            <if test="fundSearch.strategyList != null and fundSearch.strategyList != ''">
+                and 
+                <foreach open="(" separator=" or " close=")" item="item" index="index" collection="fundSearch.strategyList">
+				   <if test="item != null and item != ''">
+						(p.strategy_list like CONCAT(#{item}) or p.strategy_list like CONCAT(#{item}, ",%") or p.strategy_list like CONCAT("%,", #{item}) or 
+						p.strategy_list like CONCAT("%,", #{item}, ",%")) 
+				   </if>
+				</foreach>
+            </if>
+            <!-- 成立时间 -->
+            <if test="fundSearch.createYearBegin != null and fundSearch.createYearBegin != ''">
+                and p.create_date &gt;= #{fundSearch.createYearBegin,jdbcType=VARCHAR}
+                AND p.create_date IS NOT NULL AND p.create_date &lt;&gt;''
+            </if>
+            <if test="fundSearch.createYearEnd != null and fundSearch.createYearEnd != ''">
+                and p.create_date &lt;= #{fundSearch.createYearEnd,jdbcType=VARCHAR}
+                AND p.create_date IS NOT NULL AND p.create_date  &lt;&gt;''
+            </if>
+            <!-- 是否自主发行 -->
+            <if test="fundSearch.isIndependent != null and fundSearch.isIndependent != ''">
+                and p.is_independent = #{fundSearch.isIndependent,jdbcType=VARCHAR}
+            </if>
+            <!-- 是否组合产品 -->
+            <if test="fundSearch.isParentProduct != null and fundSearch.isParentProduct != ''">
+                and p.is_parent_product = #{fundSearch.isParentProduct,jdbcType=VARCHAR}
+            </if>
+            <!-- 是否关注 -->
+            <if test="fundSearch.myAttentionStr != null and fundSearch.myAttentionStr != ''">
+                and focus_fund.attention_statu = #{fundSearch.myAttentionStr,jdbcType=VARCHAR}
+            </if>
+            <!-- 产品ID -->
+            <if test="fundSearch.productID != null and fundSearch.productID != ''">
+                and p.id = #{fundSearch.productID,jdbcType=VARCHAR}
+            </if>
+            <if test="fundSearch.beginDate != null and fundSearch.beginDate != '' and fundSearch.endDate != null and fundSearch.endDate != ''">
+	            and p.id in (select product_id 
+	            			from t_product_net_value 
+	            			where 1=1 
+	            				<if test="fundSearch.beginDate != null and fundSearch.beginDate != ''">
+				                AND date &gt;= #{fundSearch.beginDate,jdbcType=VARCHAR}
+				            </if>
+				            <if test="fundSearch.endDate != null and fundSearch.endDate != ''">
+				                AND date &lt;= #{fundSearch.endDate,jdbcType=VARCHAR}
+				            </if>)
+				        </if>
+			</if>
+			<!-- 产品类型 -->
+			<if test="fundSearch.productTypes != null and fundSearch.productTypes != ''">
+				AND
+				<foreach open="(" separator=" or " close=")" item="item" index="index" collection="fundSearch.productTypes">
+					(CONCAT(',',CONCAT_WS(',',p.product_type),',') like CONCAT("%,",#{item},",%")) 
+				</foreach>
+			</if>
+        <if test="productList != null and productList.size > 0">
+	    	and p.id in 
+	    	<foreach item="id" index="index" collection="productList" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+	   	</if>
+        
+        <if test="orderType == 0">
+		 		ORDER BY p.id DESC
+		</if>
+		<if test="orderType != 0">
+			<if test="orderType != null and orderWay != null">
+				ORDER BY 
+			 	<if test="orderType == 2">
+			 		p.product_name
+			 	</if>
+			 	<if test="orderType == 3">
+			 		p.future_strategy_list 
+			 		<if test="orderWay == 1">
+						asc
+					</if>
+					<if test="orderWay != 1">
+						desc
+					</if>
+		 			,p.securities_strategy_list
+		 			<if test="orderWay == 1">
+						asc
+					</if>
+					<if test="orderWay != 1">
+						desc
+					</if>
+					,p.other_strategy_list
+			 	</if>
+			 	<if test="orderType == 4">
+			 		t5.until_now
+			 	</if>
+			 	<if test="orderType == 5">
+			 		p.fund_trustee 
+			 	</if>
+			 	<if test="orderType == 6">
+			 		p.fund_manager
+			 	</if>
+			 	<if test="orderType == 7">
+			 		p.initial_asset*1 
+			 	</if>
+			 	<if test="orderType == 8">
+			 		p.create_date
+			 	</if>
+			 	<if test="orderType == 9">
+			 		p.newest_net_value
+			 	</if>
+			 	<if test="orderType == 10">
+			 		<if test="fundSearch.yieldRatio == 0">
+	                     t1.until_now
+	                </if>
+	                <!-- 收益率近一月 -->
+	                <if test="fundSearch.yieldRatio == 1">
+	                    t1.one_month
+	                </if>
+	                <!-- 收益率近三月 -->
+	                <if test="fundSearch.yieldRatio == 2">
+	                    t1.three_month
+	                </if>
+	                <!-- 收益率近6月 -->
+	                <if test="fundSearch.yieldRatio == 3">
+	                    t1.six_month 
+	                </if>
+	                <!-- 收益率近一年 -->
+	                <if test="fundSearch.yieldRatio == 4">
+	                    t1.one_year
+	                </if>
+	                <!-- 今年以来 -->
+	                <if test="fundSearch.yieldRatio == 5">
+	                    t1.this_year
+	                </if>
+			 	</if>
+			 	<if test="orderType == 11">
+			 		<if test="fundSearch.drawDownRatio == 0">
+	                     t2.until_now
+	                </if>
+	                <!-- 收益率近一月 -->
+	                <if test="fundSearch.drawDownRatio == 1">
+	                     t2.one_month
+	                </if>
+	                <!-- 收益率近三月 -->
+	                <if test="fundSearch.drawDownRatio == 2">
+	                     t2.three_month
+	                </if>
+	                <!-- 收益率近6月 -->
+	                <if test="fundSearch.drawDownRatio == 3">
+	                     t2.six_month 
+	                </if>
+	                <!-- 收益率近一年 -->
+	                <if test="fundSearch.drawDownRatio == 4">
+	                     t2.one_year
+	                </if>
+	                <!-- 今年以来 -->
+	                <if test="fundSearch.drawDownRatio == 5">
+	                     t2.this_year
+	                </if>
+			 	</if>
+			 	<if test="orderType == 12">
+			 		<if test="fundSearch.sharpRatio == 0">
+	                     t3.until_now
+	                </if>
+	                <!-- 收益率近一月 -->
+	                <if test="fundSearch.sharpRatio == 1">
+	                     t3.one_month
+	                </if>
+	                <!-- 收益率近三月 -->
+	                <if test="fundSearch.sharpRatio == 2">
+	                     t3.three_month
+	                </if>
+	                <!-- 收益率近6月 -->
+	                <if test="fundSearch.sharpRatio == 3">
+	                     t3.six_month 
+	                </if>
+	                <!-- 收益率近一年 -->
+	                <if test="fundSearch.sharpRatio == 4">
+	                     t3.one_year
+	                </if>
+	                <!-- 今年以来 -->
+	                <if test="fundSearch.sharpRatio == 5">
+	                     t3.this_year 
+	                </if>
+			 	</if>
+			 	<if test="orderType == 13">
+			 		<if test="fundSearch.calmaRatio == 0">
+	                     t4.until_now 
+	                </if>
+	                <!-- 收益率近一月 -->
+	                <if test="fundSearch.calmaRatio == 1">
+	                     t4.one_month
+	                </if>
+	                <!-- 收益率近三月 -->
+	                <if test="fundSearch.calmaRatio == 2">
+	                     t4.three_month
+	                </if>
+	                <!-- 收益率近6月 -->
+	                <if test="fundSearch.calmaRatio == 3">
+	                     t4.six_month 
+	                </if>
+	                <!-- 收益率近一年 -->
+	                <if test="fundSearch.calmaRatio == 4">
+	                     t4.one_year
+	                </if>
+	                <!-- 今年以来 -->
+	                <if test="fundSearch.calmaRatio == 5">
+	                     t4.this_year
+	                </if>
+			 	</if>
+			 	<if test="orderType == 14">
+			 		p.product_status
+			 	</if>
+			 	<if test="orderType == 15">
+			 		p.newest_net_value_update_date
+			 	</if>
+			 	<if test="orderType == 16">
+			 		p.newest_net_value_data_source
+			 	</if>
+			 	<if test="orderType == 17">
+			 		p.newest_settlement_sheet_update_date
+			 	</if>
+			 	<if test="orderType == 18">
+			 		p.newest_settlement_sheet_data_source
+			 	</if>
+				<if test="orderWay == 1">
+					asc
+				</if>
+				<if test="orderWay != 1">
+					desc
+				</if>
+			</if>
+		</if>
+	</select>
+
+	<!-- 获取产品最新指标数据 -->
+	<select id="getProductLastKpiInfo" parameterType="String" resultType="com.quantdo.iwin.response.FundSearchResponse">
+		SELECT 
+		  p.id productId,
+		  p.product_code productCode,
+		  p.product_name productName,
+		  p.product_short_name productShortName,
+		  p.fund_trustee fundTrustee,
+		  p.fund_manager fundManager,
+		  p.initial_asset initialAsset,
+		  p.strategy_list strategyList,
+		  (SELECT 
+		    data_describe 
+		  FROM
+		    t_iwin_data_dictionary 
+		  WHERE data_type = 'ProductState' 
+		    AND data_value = p.product_status) productStatus,
+		  FORMAT(t.net_asset_value, 2) netNewestValue,
+		  FORMAT(ABS(drawDownTemp.value) * 100, 2) maxDrawDown,
+		  FORMAT(t.net_accumulative_value, 2) netAccumulativeValue,
+		  FORMAT(sharpTemp.value, 2) sharpRatio,
+		  FORMAT(sortinoTemp.value, 2) sortinoRatio,
+		  FORMAT(calmarTemp.value, 2) calmarRatio,
+		  FORMAT(t1.value * 100, 2) untilNow,
+		  p.product_type productType,
+		  p.create_date createDate,
+		  t.date DATE,
+		  focus_fund.attention_statu attentionStatu,
+		  p.is_parent_product isParentProduct 
+		FROM
+		  t_product p 
+		  LEFT JOIN 
+		    (SELECT 
+			  net_accumulative_value,
+			  net_asset_value,
+			  product_id,
+			  DATE 
+			FROM
+			  t_product_net_value 
+			WHERE product_id = #{fundSearch.productID,jdbcType=VARCHAR} 
+			ORDER BY DATE DESC 
+			LIMIT 1) t 
+		    ON p.id = t.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = '040006' 
+		      AND a.period_type = 0 
+		      AND a.product_id = #{fundSearch.productID,jdbcType=VARCHAR} 
+		    ORDER BY a.date DESC 
+		    LIMIT 1) drawDownTemp 
+		    ON drawDownTemp.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = '030007' 
+		      AND a.period_type = 0 
+		      AND a.product_id = #{fundSearch.productID,jdbcType=VARCHAR} 
+		    ORDER BY a.date DESC 
+		    LIMIT 1) sharpTemp 
+		    ON sharpTemp.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = '030014'
+		      AND a.period_type = 0 
+		      AND a.product_id = #{fundSearch.productID,jdbcType=VARCHAR} 
+		    ORDER BY a.date DESC 
+		    LIMIT 1) calmarTemp 
+		    ON calmarTemp.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = '030013' 
+		      AND a.period_type = 0 
+		      AND a.product_id = #{fundSearch.productID,jdbcType=VARCHAR} 
+		    ORDER BY a.date DESC 
+		    LIMIT 1) sortinoTemp 
+		    ON calmarTemp.product_id = p.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      p.id,
+		      'true' attention_statu 
+		    FROM
+		      t_product p,
+		      t_user_product_follow t 
+		    WHERE p.id = t.product_id 
+		     <if test="fundSearch != null">
+		  	 <if test="fundSearch.loginID != null and fundSearch.loginID !=''">
+			       and t.login_id = #{fundSearch.loginID,jdbcType=VARCHAR}  
+			 </if>
+		  </if>
+		  
+		    GROUP BY p.id,
+		      attention_statu) focus_fund 
+		    ON p.id = focus_fund.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.value,
+		      a.product_id 
+		    FROM
+		      t_product_period_statistics a 
+		    WHERE a.kpi = '030002' 
+		      AND a.period_type = 0 
+		      AND a.product_id = #{fundSearch.productID,jdbcType=VARCHAR} 
+		    ORDER BY a.date DESC 
+		    LIMIT 1) t1 
+		    ON t1.product_id = p.id 
+		WHERE 1 = 1 
+		  AND p.id = #{fundSearch.productID,jdbcType=VARCHAR} 
+	</select>
+	
+	<!-- 根据当前登录用户获取其选中产品列表 -->
+	<select id="getSelectedProductList" parameterType="String" resultType="com.quantdo.iwin.entity.UserSelectedProduct">
+		SELECT 
+		  a.id id,
+		  a.user_id userId,
+		  a.product_id productId,
+		  b.product_name productName 
+		FROM
+		  t_user_selected_product a 
+		  LEFT JOIN t_product b 
+		    ON a.product_id = b.id 
+		WHERE a.user_id = #{userId,jdbcType=VARCHAR} 
+	</select>
+	<!-- 获取子产品列表 -->
+	<select id="getChildProducts" parameterType="String" resultType="com.quantdo.iwin.entity.ProductsRelationship">
+		SELECT t.product_id productIDStr,p.product_name productName
+		FROM t_products_relationship t 
+		LEFT JOIN t_product p ON t.product_id = p.id 
+		WHERE t.parent_product_id=#{parentProductId,jdbcType=VARCHAR}
+		GROUP BY t.product_id
+		order by p.id desc
+	</select>
+	
+	<!-- 获取子产品列表 -->
+	<select id="getProductMarketType" parameterType="String" resultType="com.quantdo.iwin.response.ProductMarketTypeResponse">
+		SELECT 
+			futureList.market_type future,
+			secureityList.market_type SECURITY,
+			spotMarketList.market_type spotMarket, 
+			bondList.market_type bond  
+		FROM ( 		  
+			SELECT product_id FROM (	  
+				SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id 
+				FROM t_position_summary 
+				WHERE market_type IS NOT NULL 
+					AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+						FROM t_product_invester_relationship 
+						WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) 
+						LIMIT 1 )ps
+				UNION 
+				SELECT product_id FROM (
+				SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id
+				FROM t_transaction_summary 
+				WHERE market_type IS NOT NULL 
+					AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+						FROM t_product_invester_relationship 
+						WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) 
+				LIMIT 1)ts
+			)t
+		LEFT JOIN ( 		  
+			SELECT product_id,market_type FROM (	  
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_position_summary 
+			WHERE market_type = '1'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1 )ps
+			UNION 
+			SELECT product_id,market_type FROM (
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_transaction_summary 
+			WHERE market_type = '1'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1)ts
+			)futureList on t.product_id = futureList.product_id
+		LEFT JOIN ( 		  
+			SELECT product_id,market_type FROM (	  
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_position_summary 
+			WHERE market_type = '2'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1 )ps
+			UNION 
+			SELECT product_id,market_type FROM (
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_transaction_summary 
+			WHERE market_type = '2'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1)ts
+			)secureityList ON t.product_id = secureityList.product_id
+		LEFT JOIN( 		  
+			SELECT product_id,market_type FROM (	  
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_position_summary 
+			WHERE market_type = '7'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1 )ps
+			UNION 
+			SELECT product_id,market_type FROM (
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_transaction_summary 
+			WHERE market_type = '7'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1)ts
+			)spotMarketList ON t.product_id = spotMarketList.product_id
+		LEFT JOIN( 		  
+			SELECT product_id,market_type FROM (	  
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_position_summary 
+			WHERE market_type = '8'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1 )ps
+			UNION 
+			SELECT product_id,market_type FROM (
+			SELECT invester_id,broker_id,#{analysisProductPeriod.productID ,jdbcType=VARCHAR} product_id ,market_type
+			FROM t_transaction_summary 
+			WHERE market_type = '8'
+				AND CONCAT(invester_id,broker_id) IN (SELECT CONCAT(invester_id,broker_id) 
+					FROM t_product_invester_relationship 
+					WHERE product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}) LIMIT 1)ts
+			)bondList ON t.product_id = bondList.product_id
+	</select>
+</mapper>

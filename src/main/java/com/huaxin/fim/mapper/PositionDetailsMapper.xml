@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.PositionDetailsMapper">
+
+	<select id="getPositionDetails" parameterType="map"
+		resultType="com.quantdo.iwin.entity.PositionDetails">
+		SELECT DISTINCT details.date date,details.invester_id investerID,details.data_source dataSource FROM t_position_details details
+		WHERE details.date NOT IN(
+		SELECT DISTINCT details.date DATE FROM t_position_details
+		details ,t_position_summary summary
+		WHERE
+		details.date = summary.date
+		and details.invester_id = summary.invester_id
+		and details.data_source = summary.data_source)
+		ORDER BY details.date ASC
+	</select>
+	
+	<select id="getPositionDetailsNotINSummary" parameterType="map"
+		resultType="com.quantdo.iwin.entity.PositionDetails">
+		SELECT DISTINCT 
+		  details.date DATE,
+		  details.invester_id investerID
+		FROM
+		  t_position_details details 
+		  LEFT JOIN   t_position_summary summary
+		    ON summary.invester_id = details.invester_id 
+		    and summary.broker_id = details.broker_id 
+		    AND summary.date = details.date 
+		    AND details.data_source = summary.data_source 
+		LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship tp 
+		    WHERE product_id IN 
+		            <foreach item="productId" index="index" collection="productIdList" open="(" separator="," close=")">  
+			            #{productId}  
+			  		</foreach>
+			  		) AS temp 
+		    ON 1 = 1 
+		WHERE details.invester_id IN (temp.invester_id) 
+		  AND details.broker_id IN (temp.broker_id) 
+		  AND (
+		    summary.date IS NULL 
+		    OR (
+		      summary.update_date &lt;&gt; details.update_date
+		    )
+		    OR (
+		      summary.position_buy &lt;&gt;0 AND summary.position_buy is not null 
+    		  AND summary.position_sell &lt;&gt;0 AND summary.position_sell is not null 
+		    )
+		  ) 
+		ORDER BY details.date ASC
+	</select>
+	
+	<select id="getPositionDetailsByType" parameterType="map"
+		resultType="com.quantdo.iwin.entity.PositionDetails">
+		SELECT DISTINCT details.date date,details.invester_id investerID FROM t_position_details
+		details
+		where 1 = 1
+		<if
+			test="positionDetails.dataSource  != null and positionDetails.dataSource != '' ">
+			AND details.data_source = #{positionDetails.dataSource ,jdbcType=VARCHAR} 
+		</if>
+		ORDER BY details.date ASC
+	</select>
+
+</mapper>

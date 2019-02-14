@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.IndexMapper">
+
+	
+	<!-- 计算产品基准指数数据 -->
+	<select id="calculateFFIndex" parameterType="map" resultType="com.quantdo.iwin.entity.Index">
+		SELECT 
+		  t.date,
+		  #{indexParam.indexId ,jdbcType=VARCHAR} indexId,
+		  #{indexParam.indexName ,jdbcType=VARCHAR} indexName,
+		  round((SUM(IFNULL(t.asset_value*t.net_accumulative_value, 0))/ SUM(IFNULL(t.asset_value,0)))*1000,4) closePrice,
+		  null  dailyYieldRate
+		FROM
+		  t_product_net_value t 
+		WHERE t.date &gt;= #{indexParam.beginDate ,jdbcType=VARCHAR}  
+			and t.date&lt;=#{indexParam.endDate ,jdbcType=VARCHAR} 
+			AND t.asset_value IS NOT NULL AND t.net_accumulative_value IS NOT NULL 
+			AND t.product_id IN (SELECT a.id 
+									FROM t_product a
+								 WHERE a.is_parent_product=#{indexParam.isParent ,jdbcType=VARCHAR} 
+								 AND a.is_independent=1)
+		GROUP BY t.date
+	</select>
+	
+	<!-- 计算产品策略基准指数数据 -->
+	<select id="calculateFFStrategyIndex" parameterType="map" resultType="com.quantdo.iwin.entity.Index">
+		SELECT 
+		  t.date,
+		  #{indexParam.indexId ,jdbcType=VARCHAR} indexId,
+		  #{indexParam.indexName ,jdbcType=VARCHAR} indexName,
+		  ROUND((SUM(IFNULL(t.asset_value*t.net_accumulative_value/strategyList.strategyNum, 0))/ SUM(IFNULL(t.asset_value/strategyList.strategyNum,0)))*1000,4) closePrice,
+		  NULL  dailyYieldRate
+		FROM
+		  t_product_net_value t 
+		  LEFT JOIN (SELECT id,strategyNum strategyNum FROM(
+			SELECT id,
+				(CASE WHEN LENGTH(p.strategy_list) > 0 THEN LENGTH(p.strategy_list)-LENGTH(REPLACE(p.strategy_list,',',''))+1 ELSE 0 END) strategyNum,
+				strategy_list
+				FROM t_product p 
+				WHERE p.is_parent_product=#{indexParam.isParent ,jdbcType=VARCHAR} 
+				<if test="indexParam.futureStrategyStr != null and indexParam.futureStrategyStr != ''">
+					and p.strategy_list like CONCAT("%",#{indexParam.futureStrategyStr ,jdbcType=VARCHAR},"%")
+				</if>
+				<if test="indexParam.securityStrategyStr != null and indexParam.securityStrategyStr != ''">
+					and p.strategy_list like CONCAT("%",#{indexParam.securityStrategyStr ,jdbcType=VARCHAR},"%")
+				</if>
+				<if test="indexParam.ohterStrategyStr != null and indexParam.ohterStrategyStr != ''">
+					and p.strategy_list like CONCAT("%",#{indexParam.ohterStrategyStr ,jdbcType=VARCHAR},"%")
+				</if>
+				 AND p.is_independent=1)X)strategyList ON t.product_id = strategyList.id
+		WHERE t.date &gt;= #{indexParam.beginDate ,jdbcType=VARCHAR}  
+			and t.date&lt;=#{indexParam.endDate ,jdbcType=VARCHAR} 
+			AND t.asset_value IS NOT NULL AND t.net_accumulative_value IS NOT NULL 
+			AND t.product_id IN (SELECT a.id 
+					FROM t_product a
+				 WHERE a.is_parent_product=#{indexParam.isParent ,jdbcType=VARCHAR} 
+				 <if test="indexParam.futureStrategyStr != null and indexParam.futureStrategyStr != ''">
+					and a.strategy_list like CONCAT("%",#{indexParam.futureStrategyStr ,jdbcType=VARCHAR},"%")
+				</if>
+				<if test="indexParam.securityStrategyStr != null and indexParam.securityStrategyStr != ''">
+					and a.strategy_list like CONCAT("%",#{indexParam.securityStrategyStr ,jdbcType=VARCHAR},"%")
+				</if>
+				<if test="indexParam.ohterStrategyStr != null and indexParam.ohterStrategyStr != ''">
+					and a.strategy_list like CONCAT("%",#{indexParam.ohterStrategyStr ,jdbcType=VARCHAR},"%")
+				</if>
+				 AND a.is_independent=1)
+		GROUP BY t.date;
+	</select>
+	<!-- 获取基准中最大日期 -->
+	<select id="getMaxDateByIndexId" parameterType="map" resultType="java.lang.String">
+		select max(date) from t_index where index_id=#{indexId ,jdbcType=VARCHAR} 
+	</select>
+	<!-- 获取净值中最小日期 -->
+	<select id="getMinDateByIsParent" parameterType="map" resultType="java.lang.String">
+		select min(date) 
+		from t_product_net_value 
+		where product_id in(select id from t_product 
+			where is_independent = 1 
+			and is_parent_product = #{fundSearchRequest.isParentProduct ,jdbcType=VARCHAR}
+			<if test="fundSearchRequest.futureStrategyStr != null and fundSearchRequest.futureStrategyStr != ''">
+				and strategy_list like CONCAT("%",#{fundSearchRequest.futureStrategyStr ,jdbcType=VARCHAR},"%")
+			</if>
+			<if test="fundSearchRequest.securityStrategyStr != null and fundSearchRequest.securityStrategyStr != ''">
+				and strategy_list like CONCAT("%",#{fundSearchRequest.securityStrategyStr ,jdbcType=VARCHAR},"%")
+			</if>
+			<if test="fundSearchRequest.ohterStrategyStr != null and fundSearchRequest.ohterStrategyStr != ''">
+				and strategy_list like CONCAT("%",#{fundSearchRequest.ohterStrategyStr ,jdbcType=VARCHAR},"%")
+			</if>
+			)
+	</select>
+	
+	<delete id="deleteIndexByPeriodAndIndexId" parameterType="map">
+		delete from t_index where index_id = #{indexParam.indexId ,jdbcType=VARCHAR}
+		and date &gt;=#{indexParam.beginDate ,jdbcType=VARCHAR} 
+		and date &lt;=#{indexParam.endDate ,jdbcType=VARCHAR}  
+	</delete>
+</mapper>

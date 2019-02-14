@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AiskAssessRiskValueMapper">
+	
+	<!-- 资产基金的估值表的市值-->
+	<select id="rikeValueMarketValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+				  SELECT  x.* FROM(SELECT 
+						  DATE DATE,
+						  product_id productID,
+						  KPI kpi,
+						  NULL dataSource,
+						  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+						  (CASE WHEN(today=0.00000000) 
+						  THEN NULL
+						  ELSE today
+						  END)
+						  today,
+						  NULL oneMonth,
+						  NULL threeMonth,
+						  NULL sixMonth,
+						  NULL oneYear,
+						  NULL untilNow,
+						  NULL thisYear 
+						FROM
+						  t_product_period_kpi_statistics 
+						WHERE kpi = '020073'
+	<if
+		test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+		and product_id= #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+	</if>
+	)X WHERE  x.today IS NOT NULL
+	</select>
+	
+</mapper>

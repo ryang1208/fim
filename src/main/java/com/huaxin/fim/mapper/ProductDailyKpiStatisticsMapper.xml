@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductDailyKpiStatisticsMapper">
+	<!-- 删除产品每日统计表 -->
+    <delete id="deleteProductNetValueDaily" parameterType="map">
+		delete from t_product_daily_kpi_statistics
+		where 1=1
+		<if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+				and date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+				and date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 最大回撤和平均回撤（产品每日统计） -->
+	<select id="calculateProductDrawdownDaily" parameterType="map" resultType="com.quantdo.iwin.entity.ProductDailyKPIStatistics">
+		select 
+		  t.date date,
+		  t.product_id productID,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR}  dataSource,
+		  date_format(current_date(),'%Y%m%d') statDate,
+		  td.sharp_ratio sharpRatio,
+		  td.sortino_ratio sortinoRatio,
+		  td.calmar_ratio calmarRatio,
+		  round(maxDrawdown.maxDrawdown,8) maxDrawdown,
+		  round(averageValue.averageDrawdown,8) averageDrawdown,
+		  td.net_accumulative_value netAccumulativeValue,
+		  td.net_newest_value netNewestValue,
+		  td.risk_return_ratio riskReturnRatio,
+		  td.max_underwater_drawdown_recover_day maxUnderwaterDrawdownRecoverDay,
+		  td.current_rise_continuously_day currentRiseContinuouslyDay,
+		  td.stock_position stockPosition,
+		  td.large_stock_market_value largeStockMarketValue,
+		  td.middle_stock_market_value middleStockMarketValue,
+		  td.small_stock_market_value smallStockMarketValue,
+		  td.max_rise_continuously_day maxRiseContinuouslyDay,
+		  td.max_plummet_continuously_day maxPlummetContinuouslyDay 
+		from
+		  t_product_period_kpi_statistics t 
+		  left join t_product_daily_kpi_statistics td 
+		    on t.date = td.date 
+		    and t.product_id = td.product_id
+		  left join 
+		    (select 
+		      a.product_id,
+		      min(a.until_now) maxDrawdown 
+		    from
+		      t_product_period_kpi_statistics a 
+		    where a.date &lt;= #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}  
+		      and a.kpi = '030033'
+		      <if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and a.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+			  </if>
+			) maxDrawdown 
+		    on maxDrawdown.product_id = t.product_id 
+		  left join 
+		    (select 
+		      a.product_id,
+		      sum(ifnull(a.until_now, 0)) / count(a.date) averageDrawdown 
+		    from
+		      t_product_period_kpi_statistics a 
+		    where a.date &lt;= #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}  
+		      and a.kpi = '030033'
+		      <if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and a.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+			  </if>
+			  ) averageValue 
+		    on averageValue.product_id = t.product_id 
+		where t.KPI = '030033' 
+		  and t.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}  
+		    <if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and t.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+	<!-- 获取产品每日统计列表 -->
+	<select id="getProductDailyList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductDailyKPIStatistics">
+		SELECT 
+		  t.date DATE,
+		  t.product_id productID,
+		  t.data_source dataSource,
+		  t.stat_date statDate,
+		  t.sharp_ratio sharpRatio,
+		  t.sortino_ratio sortionRatio,
+		  t.calmar_ratio calmarRatio,
+		  t.max_drawdown maxDrawdown,
+		  t.average_drawdown averageDrawdown,
+		  t.net_accumulative_value netAccumulativeValue,
+		  t.net_newest_value netNewestValue,
+		  t.risk_return_ratio riskReturnRatio 
+		FROM
+		  t_product_daily_kpi_statistics t 
+		WHERE 1 = 1 
+		  <if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+			and t.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+		  </if>
+		  <if test="kpiCalculationRequest.beginDate != null and kpiCalculationRequest.beginDate != ''">
+                and t.date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+          </if>
+          <if test="kpiCalculationRequest.endDate != null and kpiCalculationRequest.endDate != ''">
+                and t.date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+          </if>
+	</select>
+</mapper>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.FundNetAssetMapper">
+
+
+	<resultMap id="FundNetMap" type="com.quantdo.iwin.https.ResponseDetail">
+		<result property="bh" column="bh" />
+		<result property="sl" column="sl" />
+		<result property="cb" column="cb" />
+		<result property="szzjz" column="szzjz" />
+		<result property="ztbh" column="ztbh" />
+		<result property="sfqr" column="sfqr" />
+		<result property="kmmc" column="kmmc" />
+		<result property="hqjz" column="hqjz" />
+		<result property="ywrq" column="ywrq" />
+		<result property="cbzjz" column="cbzjz" />
+		<result property="kmdm" column="kmdm" />
+		<result property="gzzz" column="gzzz" />
+		<result property="sz" column="sz" />
+		<result property="dwcb" column="dwcb" />
+		<result property="fullname" column="fullname" />
+	</resultMap>
+
+
+
+	<select id="getMaxDate" resultType="String">
+		select max(ywrq) maxDate from
+		t_raw_xin_fund_asset 
+		where raw_data_source = #{xinRawDataSource, jdbcType=INTEGER}
+	</select>
+
+	<select id="queryByDate" parameterType="map" resultMap="FundNetMap">
+		SELECT
+		bh,sl,cb,szzjz,ztbh,sfqr,kmmc,hqjz,ywrq,cbzjz,kmdm,gzzz,sz,dwcb,fullname
+		FROM iwin.t_raw_xin_fund_asset
+		<where>
+			ywrq = #{date,jdbcType=VARCHAR}
+			and 
+			raw_data_source = #{xinRawDataSource, jdbcType=INTEGER} 
+			and
+			kmdm in
+			<foreach collection="kmdms" index="index" item="response"
+			open="(" separator="," close=")">
+			#{response}
+		</foreach>
+		</where>
+	</select>
+
+</mapper>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProfitAndLossCalculationMapper">
+		
+	<!-- 计算累计盈亏指标 -->
+	<select id="calculateTotalProfitOrLossByPeriod" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  T1.date DATE,
+		  case when #{profitAndLossCalculationRequest.isProfit ,jdbcType=VARCHAR}='1' then
+			  SUM( CASE WHEN T1.close_profit IS NOT NULL THEN (CASE  WHEN T1.close_profit > 0 THEN ABS(T1.close_profit) ELSE 0 END )
+				ELSE (CASE WHEN T1.tot_profit > 0 THEN ABS(T1.tot_profit) ELSE 0 END )
+			    END
+			  )
+		  ELSE 
+			  SUM( CASE WHEN T1.close_profit IS NOT NULL THEN (CASE  WHEN T1.close_profit &lt; 0 THEN ABS(T1.close_profit) ELSE 0 END )
+				ELSE (CASE WHEN T1.tot_profit &lt; 0 THEN ABS(T1.tot_profit) ELSE 0 END )
+			    END
+			  ) 
+		end today
+		FROM
+		  t_invester_fund T1 
+		  left join 
+		    (select 
+		      invester_id,
+		      broker_id,
+		      product_id 
+		    from
+		      t_product_invester_relationship 
+		    where invester_type = 1 
+		      and product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR}) temp 
+		    on 1 = 1 
+		where T1.invester_id in (temp.invester_id) 
+		  and T1.broker_id in (temp.broker_id) 
+		group by T1.date,temp.invester_id,
+		  temp.broker_id
+		  order by T1.date
+	</select>
+    
+    <delete id="deleteStatDateAndProductIDAndKPI" parameterType="map">
+		delete from t_product_period_kpi_statistics where kpi =  #{profitAndLossCalculationRequest.kpi ,jdbcType=VARCHAR}
+		<if test="profitAndLossCalculationRequest != null">
+			<if test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+				and product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+			<if test="profitAndLossCalculationRequest.date != null and profitAndLossCalculationRequest.date !=''">
+         		and	date = #{profitAndLossCalculationRequest.date,jdbcType=VARCHAR}
+        	</if>
+		</if>
+	</delete>
+</mapper>

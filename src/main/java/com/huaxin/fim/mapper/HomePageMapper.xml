@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.HomePageMapper">
+
+	<select id="getFocusFundList" parameterType="map"
+		resultType="com.quantdo.iwin.response.FocusFundResponse">
+		SELECT
+		'已关注' focusStatus,
+		product.product_name productName,
+		product.product_manager fundManagerMan,
+		product.future_strategy_list futureStrategyList,
+		product.securities_strategy_list securitiesStrategyList,
+		product.other_strategy_list otherStrategyList,
+		product.strategy_list strategyList,
+		product.fund_manager fundManager,
+		product.create_date createDate,
+		FORMAT(dailyKpiStatistics.net_newest_value,2) netNewestValue,
+		periodKpiStatistics.this_year thisYear,
+		product.initial_asset
+		initialAsset,
+		product.id productId,
+		product.product_status
+		productStatus,
+		product.product_type productType,
+		product.fund_trustee fundTrustee,
+		FORMAT(dailyKpiStatistics.net_accumulative_value,2)
+		netAccumulativeValue,
+		dailyKpiStatistics.date DATE,
+		product.product_code productCode,
+		product.is_parent_product isParentProduct
+		FROM
+		(SELECT t.product_id
+			FROM t_user_product_follow t
+			WHERE t.login_id = #{loginID,jdbcType=VARCHAR}
+		) userProductFollow
+		LEFT JOIN t_product product ON userProductFollow.product_id = product.id
+		LEFT JOIN(SELECT
+			temp.date,
+			temp.product_id,
+			temp.net_newest_value,
+			temp.net_accumulative_value
+			FROM
+			(SELECT
+				t.date,
+				t.product_id,
+				t.net_newest_value,
+				t.net_accumulative_value
+				FROM
+				t_product_daily_kpi_statistics t
+			WHERE t.product_id IN (SELECT t.product_id
+				FROM t_user_product_follow t
+				WHERE t.login_id = #{loginID,jdbcType=VARCHAR})
+				ORDER BY t.date DESC) temp
+			GROUP BY temp.product_id
+		)dailyKpiStatistics ON userProductFollow.product_id = dailyKpiStatistics.product_id
+		LEFT JOIN(SELECT
+			temp.date,
+			temp.product_id,
+			temp.this_year
+			FROM
+			(SELECT
+				t.date,
+				t.product_id,
+				t.value this_year
+				FROM
+				t_product_period_statistics t
+				WHERE t.KPI = '020032'
+				AND t.period_type = '5'
+				GROUP BY t.date DESC,t.product_id) temp
+				WHERE temp.product_id IN (SELECT t.product_id
+				FROM t_user_product_follow t
+				WHERE t.login_id = #{loginID,jdbcType=VARCHAR})
+			GROUP BY temp.product_id
+			)periodKpiStatistics
+		ON userProductFollow.product_id = periodKpiStatistics.product_id
+		WHERE product.product_status != 3
+	</select>
+
+	<select id="getInvestedCombineFundList" parameterType="map"	resultType="com.quantdo.iwin.response.InvestedCombinationFundResponse">
+		SELECT 
+		  t.id,
+		  t.product_name productName,
+		  relation.memberFundCount memberFundCount,
+		  t.product_manager fundManagerMan,
+		  t.fund_manager fundManager,
+		  t.initial_asset initialAsset,
+		  t.create_date createDate,
+		  daily.net_newest_value netNewestValue,
+		  period.value thisYear,
+		  t.organization_id organizationId 
+		FROM
+		  t_product t 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.date,
+		      temp.product_id,
+		      temp.net_newest_value 
+		    FROM
+		      (SELECT 
+		        t.date,
+		        t.product_id,
+		        t.net_newest_value 
+		      FROM
+		        t_product_daily_kpi_statistics t 
+		      ORDER BY t.date DESC) temp 
+		    GROUP BY temp.product_id) daily 
+		    ON t.id = daily.product_id 
+		  LEFT JOIN t_product_period_statistics period 
+		    ON period.KPI = '020032' 
+		    AND period.period_type = '0' 
+		    AND period.product_id = t.id 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.parent_product_id,
+		      COUNT(temp.product_id) memberFundCount 
+		    FROM
+		      (SELECT 
+		        a.parent_product_id,
+		        a.product_id 
+		      FROM
+		        t_products_relationship a 
+		      GROUP BY a.parent_product_id,
+		        a.product_id) temp 
+		    GROUP BY temp.parent_product_id) relation 
+		    ON t.id = relation.parent_product_id 
+		WHERE is_parent_product = '1' 
+		  AND product_status &lt;&gt; '3' 
+		ORDER BY t.id 
+	</select>
+
+	<select id="getInvestedfundCombineCount" parameterType="java.lang.String"
+		resultType="java.lang.Integer">
+		SELECT COUNT(*)
+		FROM t_products_relationship t
+		INNER JOIN
+		( SELECT
+		product_id
+		FROM
+		t_product_fund_manager_relationship t
+		WHERE 1 = 1
+		<if test="loginID != null and loginID !=''">
+			and t.fund_manager = #{loginID,jdbcType=VARCHAR}
+		</if>
+		)productFundManagerRelationship
+		ON t.product_id =
+		productFundManagerRelationship.product_id
+
+	</select>
+
+	<select id="getInvestedfundCombineCountByAdmin" parameterType="java.lang.String"
+		resultType="java.lang.Integer">
+		SELECT COUNT(*)
+		FROM t_products_relationship t
+		INNER JOIN
+		( SELECT
+		product_id
+		FROM
+		t_product_fund_manager_relationship t
+		WHERE 1 = 1
+		<if test="loginID != null and loginID !=''">
+			and t.fund_manager = #{loginID,jdbcType=VARCHAR}
+		</if>
+		)productFundManagerRelationship
+		ON t.product_id =
+		productFundManagerRelationship.product_id
+
+	</select>
+
+	<select id="getInvestedCombineFundListByAdmin" parameterType="map"
+		resultType="com.quantdo.iwin.response.InvestedCombinationFundResponse">
+		SELECT
+		product.product_name productName,
+		count(*) memberFundCount,
+		'基金管理人' fundManagerMan,<!--字段值待定 -->
+		product.fund_manager fundManager,
+		product.initial_asset initialAsset,
+		product.create_date createDate,
+		dailyKpiStatistics.net_newest_value
+		netNewestValue,
+		periodKpiStatistics.this_year thisYear	
+		FROM
+		t_products_relationship t <!--母子基金对应关系表 -->
+		INNER JOIN
+		( SELECT product_id
+		FROM
+		t_product_fund_manager_relationship t
+		WHERE 1 = 1
+		<if test="loginID != null and loginID !=''">
+			and t.fund_manager = #{loginID,jdbcType=VARCHAR}
+		</if>
+		)productFundManagerRelationship
+		ON t.product_id =
+		productFundManagerRelationship.product_id
+		LEFT JOIN t_product product <!--产品表 -->
+		ON t.parent_product_id = product.id
+		LEFT JOIN
+		(<!-- 新根据时间排序再根据产品分组去重复 -->
+		SELECT
+		temp.date,
+		temp.product_id,
+		temp.net_newest_value
+		FROM
+		(
+		SELECT
+		t.date,
+		t.product_id,
+		t.net_newest_value
+		FROM
+		t_product_daily_kpi_statistics t <!--产品每日统计表 -->
+		ORDER BY t.date DESC) temp
+		GROUP BY temp.product_id
+		)dailyKpiStatistics
+		ON t.parent_product_id = dailyKpiStatistics.product_id
+		LEFT JOIN
+		(
+		SELECT
+		temp.date,
+		temp.product_id,
+		temp.this_year
+		FROM
+		(SELECT
+		t.date,
+		t.product_id,
+		t.this_year
+		FROM
+		t_product_period_kpi_statistics t <!--产品周期统计表 -->
+		WHERE t.KPI = '020032'
+		ORDER BY t.date DESC) temp
+		GROUP BY
+		temp.product_id
+		)periodKpiStatistics
+		ON t.parent_product_id =
+		periodKpiStatistics.product_id
+		<if test="orderType == null or orderWay == null">
+			ORDER BY dailyKpiStatistics.net_newest_value DESC
+		</if>
+	</select>
+	
+	<select id="getParentProductList" parameterType="map" resultType="com.quantdo.iwin.entity.iWinProduct">
+		SELECT 
+		  t.id,
+		  t.product_name productName,
+		  t.organization_id organizationId
+		FROM
+		  t_product t 
+		WHERE is_parent_product = '1' 
+		  AND product_status &lt;&gt; '3' 
+		ORDER BY t.id 
+	</select>
+
+</mapper>

@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductContactTradeDailyStatisticsMapper">
+	<!-- 计算日内交易平仓手数比/开仓成交额/平仓成交额/总成交额/当日净持仓（产品每日合约统计） -->
+	<select id="findProductContactCloseList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductContactTradeDailyStatistics">
+	SELECT DATE,
+			productID,
+			contact,
+			#{analysisProductPeriod.dataSource,jdbcType=VARCHAR}  dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			openTurnover daysOpenTurnover,
+			closeTurnover daysCloseTurnover,
+			turnover daysTurnover,
+			positionValueBuy,
+			positionValueSell ,
+			BuyLots buyLots,
+			SellLots sellLots,
+			openLots openLots,
+			closeLots closeLots
+		FROM (
+		SELECT base.DATE,
+			base.productID,
+			base.contact,
+			SUM(IFNULL(base.BuyLots,0)) BuyLots,
+			SUM(IFNULL(base.SellLots,0)) SellLots,
+			SUM(IFNULL(base.openLots,0)) openLots,
+			SUM(IFNULL(base.closeLots,0)) closeLots,
+			SUM(IFNULL(base.openTurnover,0)) openTurnover,
+			SUM(IFNULL(base.closeTurnover,0)) closeTurnover,
+			SUM(IFNULL(base.turnover,0)) turnover,
+			SUM(IFNULL(base.positionValueBuy,0)) positionValueBuy,
+			SUM(IFNULL(base.positionValueSell,0)) positionValueSell
+		FROM (
+				SELECT base.date DATE,rel.product_id productID,base.contact,
+				0 BuyLots,
+				0 SellLots,
+				SUM(CASE WHEN base.oc = 0 THEN base.lots ELSE 0 END )openLots,
+				SUM(CASE WHEN base.oc = 1 THEN base.lots ELSE 0 END )closeLots,
+				SUM(CASE WHEN base.oc = 0 THEN base.turnover ELSE 0 END )openTurnover,
+				SUM(CASE WHEN base.oc = 1 THEN base.turnover ELSE 0 END )closeTurnover,
+				SUM(base.turnover) turnover,
+				0 positionValueBuy,
+				0 positionValueSell				
+				FROM t_transaction_summary base 
+				LEFT JOIN t_product_invester_relationship rel ON base.invester_id = rel.invester_id AND base.broker_id = rel.broker_id AND rel.invester_type = '1'
+				WHERE base.date &gt;=#{analysisProductPeriod.startDate,jdbcType=VARCHAR}
+				AND base.date &lt;=#{analysisProductPeriod.endDate,jdbcType=VARCHAR}
+				<if test="analysisProductPeriod.productIds != null ">
+						and rel.product_id in
+					<foreach item="productId" index="index" collection="analysisProductPeriod.productIds" open="(" separator="," close=")">  
+			            #{productId}  
+			  		</foreach>
+				</if>
+				
+				GROUP BY base.date,base.contact
+		UNION ALL
+				SELECT base.date DATE,rel.product_id productID,base.contact,
+				position_buy BuyLots,
+				position_sell SellLots,
+				0 openLots,
+				0 closeLots,
+				0 openTurnover,
+				0 closeTurnover,
+				0 turnover,
+				(CASE WHEN base.bs = 0 THEN base.ori_margin ELSE 0 END )positionValueBuy,
+				(CASE WHEN base.bs = 1 THEN base.ori_margin ELSE 0 END )positionValueSell
+				FROM t_position_summary base 
+				LEFT JOIN t_product_invester_relationship rel ON base.invester_id = rel.invester_id AND base.broker_id = rel.broker_id AND rel.invester_type = '1'
+				WHERE base.date &gt;=#{analysisProductPeriod.startDate,jdbcType=VARCHAR}
+				AND base.date &lt;=#{analysisProductPeriod.endDate,jdbcType=VARCHAR}
+				<if test="analysisProductPeriod.productIds != null ">
+						and rel.product_id in
+					<foreach item="productId" index="index" collection="analysisProductPeriod.productIds" open="(" separator="," close=")">  
+			            #{productId}  
+			  		</foreach>
+				</if>
+				GROUP BY base.date,base.contact,base.bs)base 
+		GROUP BY base.DATE,base.productID,base.contact) baseList
+		ORDER BY baseList.date ,baseList.contact
+	</select>
+	
+	<!-- 计算日内平仓成交额比例（产品每日合约统计表） -->
+	<select id="findProductContactLevel3List" parameterType="map" resultType="com.quantdo.iwin.entity.ProductContactTradeDailyStatistics">
+		select DATE,productID,contact,#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			daysCloseLotsPropotion,daysCloseTurnover,daysOpenTurnover,daysTurnover,
+			(case when totalTurnover = 0 then 0 else format(turnover/totalTurnover,8) end) daysCloseTurnoverPropotion,
+			netPosition,positionValueBuy,positionValueSell,positionRatioBuy,positionRatioSell
+		from (
+		select para.parameter_value,base.product_id productID,base.contact,base.date DATE,
+			base.days_close_lots_propotion daysCloseLotsPropotion,
+			base.days_close_turnover daysCloseTurnover,
+			base.days_open_turnover daysOpenTurnover,
+			base.days_turnover daysTurnover,
+			(case when (base.days_close_lots_propotion &gt; 1 and base.days_close_lots_propotion &lt; 99999) then base.days_open_turnover else base.days_close_turnover end) turnover,
+			period.today totalTurnover,
+			base.net_position netPosition,
+			base.position_value_buy positionValueBuy,
+			base.position_value_sell positionValueSell,
+			base.position_ratio_buy positionRatioBuy,
+			base.position_ratio_sell positionRatioSell 
+		from t_custom_parameter para,t_product_contact_trade_daily_statistics base
+		left join t_product_period_kpi_statistics period on base.date = period.date and base.product_id = period.product_id and period.KPI = '020000'
+		where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			and base.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+		</if>
+		and para.parameter_code = 'DaysCloseLotsRatio')X
+		  
+	</select>
+	
+	<!-- 计算日内平仓成交额比例（产品每日合约统计表） -->
+	<select id="findPositionLastDaysList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductContactTradeDailyStatistics">
+		select base.product_id productID,base.contact,base.date DATE,base.data_source dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			base.days_close_lots_propotion daysCloseLotsPropotion,
+			base.days_close_turnover daysCloseTurnover,
+			base.days_open_turnover daysOpenTurnover,
+			base.days_turnover daysTurnover,
+			base.net_position netPosition,
+			base.days_close_turnover_propotion daysCloseTurnoverPropotion,
+			if(isnull(yesterday.net_position is not null),0,(case when base.net_position = 0 then 0 when ((yesterday.net_position &gt;0 and base.net_position &gt;0) or (yesterday.net_position &lt;0 and base.net_position &lt;0)) then yesterday.position_day+1 else 1 end)) positionDay,
+			base.position_value_buy positionValueBuy,
+			base.position_value_sell positionValueSell,
+			base.position_ratio_buy positionRatioBuy,
+			base.position_ratio_sell positionRatioSell
+		from t_product_contact_trade_daily_statistics base
+		left join (select * from (select product_id,contact,date,net_position,position_day from t_product_contact_trade_daily_statistics where date &lt; #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by  product_id,contact,date desc)X group by product_id,contact)yesterday on yesterday.product_id = base.product_id and yesterday.contact = base.contact
+		where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			and base.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<!-- 计算买/卖持仓持续天数/手数（产品每日合约统计表） -->
+	<select id="findProductContactLevel5List" parameterType="map" resultType="com.quantdo.iwin.entity.ProductContactTradeDailyStatistics">
+		select base.product_id productID,base.contact,base.date DATE,base.data_source dataSource,
+			DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+			base.days_close_lots_propotion daysCloseLotsPropotion,
+			base.days_close_turnover daysCloseTurnover,
+			base.days_open_turnover daysOpenTurnover,
+			base.days_turnover daysTurnover,
+			base.net_position netPosition,
+			base.days_close_turnover_propotion daysCloseTurnoverPropotion,
+			base.position_day positionDay,
+			(case when (base.net_position > 0 and (base.position_day >= buyList.max_position_day_buy or buyList.max_position_day_buy is null) and (base.net_position &lt; buyList.max_net_position_buy or (buyList.max_net_position_buy is null or buyList.max_net_position_buy = 0))) then base.net_position else buyList.max_net_position_buy end) maxNetPositionBuy,
+			(case when (base.net_position > 0 and (base.position_day >= buyList.max_position_day_buy or buyList.max_position_day_buy is null)) then base.position_day else buyList.max_position_day_buy end) maxPositionDayBuy,
+			(case when (base.net_position &lt; 0 and (base.position_day >= sellList.max_position_day_sell or sellList.max_position_day_sell is null) and (base.net_position > sellList.max_net_position_sell or (sellList.max_net_position_sell is null or sellList.max_net_position_sell=0))) then base.net_position else sellList.max_net_position_sell end) maxNetPositionSell,
+			(case when (base.net_position &lt; 0 and (base.position_day >= sellList.max_position_day_sell or sellList.max_position_day_sell is null)) then base.position_day else sellList.max_position_day_sell end) maxPositionDaySell,
+			base.position_value_buy positionValueBuy,
+			base.position_value_sell positionValueSell,
+			base.position_ratio_buy positionRatioBuy,
+			base.position_ratio_sell positionRatioSell
+		from t_product_contact_trade_daily_statistics base
+		left join (select * from (select product_id,contact,max_net_position_buy,max_position_day_buy from t_product_contact_trade_daily_statistics where net_position > 0 and date &lt; #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by contact,product_id,date desc)X group by product_id,contact) buyList on buyList.contact = base.contact and buyList.product_id = base.product_id
+		left join (select * from (select product_id,contact,max_net_position_sell,max_position_day_sell from t_product_contact_trade_daily_statistics where net_position &lt; 0 and date &lt; #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by contact,product_id,date desc)Y group by product_id,contact) sellList on sellList.contact = base.contact and sellList.product_id = base.product_id
+		where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			and base.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+		</if>
+		  
+	</select>
+	
+	<!-- 删除产品每日统计表 -->
+    <delete id="deleteProductContactTradeDaily" parameterType="map">
+		delete from t_product_contact_trade_daily_statistics
+		where 1=1
+		<if test="analysisProductPeriod != null">
+			<if test="analysisProductPeriod.startDate  != null and analysisProductPeriod.startDate != ''">
+				and date &gt;= #{analysisProductPeriod.startDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="analysisProductPeriod.endDate  != null and analysisProductPeriod.endDate != ''">
+				and date &lt;= #{analysisProductPeriod.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+				and product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 获取产品合约持仓信息（产品每日合约统计表） -->
+	<select id="findInsPositionValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductContactTradeDailyStatistics">
+		SELECT 	pro.id productID,
+				pos.date date,
+				pos.contact contact,
+				pos.ori_margin positionValueBuy,
+				pos.bs bs
+		FROM (
+		SELECT p.id,r.invester_id,r.broker_id 
+		FROM t_product p INNER JOIN t_product_invester_relationship r ON p.id = r.product_id 
+		where 1=1 
+			<if test="analysisProductPeriod.productIds != null ">
+					and p.id in
+				<foreach item="productId" index="index" collection="analysisProductPeriod.productIds" open="(" separator="," close=")">  
+		            #{productId}  
+		  		</foreach>
+			</if>
+		) pro
+		INNER JOIN 
+		(SELECT s.invester_id,s.broker_id,s.date,s.contact,s.ori_margin,s.bs 
+		FROM t_position_summary s 
+		WHERE s.date &gt;= #{analysisProductPeriod.startDate ,jdbcType=VARCHAR} 
+		AND s.date &lt;= #{analysisProductPeriod.endDate ,jdbcType=VARCHAR} 
+		AND s.market_type = '1' AND s.ori_margin IS NOT NULL) pos 
+		ON pro.invester_id = pos.invester_id AND pro.broker_id = pos.broker_id
+	</select>
+	
+	<!-- 获取产品总资产信息（产品周期统计表） -->
+	<select id="findProductAssetByDateAndProductID" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 	p.date date,
+				p.product_id productID,
+				p.today today
+		FROM t_product_period_kpi_statistics p 
+		WHERE p.kpi = '020099' AND p.date &gt;= #{analysisProductPeriod.startDate ,jdbcType=VARCHAR} 
+		AND p.date &lt;= #{analysisProductPeriod.endDate ,jdbcType=VARCHAR} 
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			AND p.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<!-- 获取产品合约持仓信息（产品每日合约统计表） -->
+	<select id="findPositionValueByDateAndProductID" parameterType="map" resultType="com.quantdo.iwin.entity.ProductContactTradeDailyStatistics">
+		SELECT 	c.date date,
+				c.product_id productID,
+				c.contact contact,
+				c.data_source dataSource,
+				c.stat_date statDate,
+				c.days_close_lots_propotion daysCloseLotsPropotion,
+				c.days_open_turnover daysOpenTurnover,
+				c.days_turnover daysTurnover,
+				c.days_close_turnover daysCloseTurnover,
+				c.days_close_turnover_propotion daysCloseTurnoverPropotion,
+				c.net_position netPosition,
+				c.position_day positionDay,
+				c.max_net_position_buy maxNetPositionBuy,
+				c.max_position_day_buy maxPositionDayBuy,
+				c.max_net_position_sell maxNetPositionSell,
+				c.max_position_day_sell maxPositionDaySell,
+				c.position_value_buy positionValueBuy,
+				c.position_value_sell positionValueSell,
+				c.position_ratio_buy positionRatioBuy,
+				c.position_ratio_sell positionRatioSell
+		FROM t_product_contact_trade_daily_statistics c 
+		WHERE c.date &gt;= #{analysisProductPeriod.startDate ,jdbcType=VARCHAR} 
+		AND c.date &lt;= #{analysisProductPeriod.endDate ,jdbcType=VARCHAR} 
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			AND c.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<!-- 获取产品合约持仓比例前十信息（页面查询） -->
+	<select id="findFuturePositionRatioByCondition" parameterType="map" resultType="com.quantdo.iwin.entity.ProductContactTradeDailyStatistics">
+		SELECT 	c.date date,
+				c.product_id productID,
+				c.contact contact,
+				ROUND(c.position_value_buy/10000, 2) positionValueBuy,
+				ROUND(c.position_value_sell/10000, 2) positionValueSell,
+				ROUND(c.position_ratio_buy*100, 2) positionRatioBuy,
+				ROUND(c.position_ratio_sell*100, 2) positionRatioSell
+		FROM t_product_contact_trade_daily_statistics c 
+		WHERE c.product_id = #{request.productId,jdbcType=VARCHAR}
+		<if test="request.beginDate != null and request.beginDate !=''">
+			AND c.date = #{request.beginDate,jdbcType=VARCHAR} 
+		</if> 
+		<if test="request.beginDate == null">
+			AND c.date = (SELECT 
+							  MAX(d.date) 
+							FROM
+							  (SELECT 
+							    DATE,
+							    SUM(
+							      IFNULL(position_value_buy, 0) + IFNULL(position_value_sell, 0)
+							    ) sumValue,
+							    SUM(
+							      IFNULL(position_ratio_buy, 0) + IFNULL(position_ratio_sell, 0)
+							    ) sumRatio
+							  FROM
+							    t_product_contact_trade_daily_statistics 
+							  WHERE product_id = #{request.productId,jdbcType=VARCHAR}
+							  GROUP BY DATE 
+							  ORDER BY DATE DESC) d 
+							WHERE d.sumValue > 0 
+							AND d.sumRatio >0)
+		</if>
+		ORDER BY (IFNULL(c.position_value_buy,0) + IFNULL(c.position_value_sell,0)) DESC
+  		LIMIT 10
+	</select>
+	
+	<!-- 获取产品合约持仓比例有数据的最近一天 -->
+	<select id="findNearestPositionRatioDay" parameterType="map" resultType="String">
+		SELECT MAX(c.date)
+		FROM t_product_contact_trade_daily_statistics c 
+		WHERE c.product_id = #{request.productId,jdbcType=VARCHAR} 
+		AND (c.position_ratio_buy IS NOT NULL OR c.position_ratio_sell IS NOT NULL)
+	</select>
+	
+</mapper>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ShareImportMapper">
+	
+	<!-- 资产基金的估值表的市值-->
+	<select id="getPendingJobList" parameterType="map" resultType="com.quantdo.iwin.entity.PendingJob">
+		SELECT 
+		  MIN(a.confirm_date) DATE,
+		  a.client_product_id productID,
+		  "0" KPIType,
+		  "0" isWorking 
+		FROM
+		  t_share_import a 
+		WHERE a.client_product_id IS NOT NULL 
+		  AND a.product_name = #{productName,jdbcType=VARCHAR}
+		  AND a.confirm_date &gt;= #{beginDate,jdbcType=VARCHAR}
+		  AND a.confirm_date &lt;= #{endDate,jdbcType=VARCHAR}
+		group by a.client_product_id
+	</select>
+	
+	<!-- 条件查询份额数据列表 -->
+	<select id="getShareList" parameterType="map" resultType="com.quantdo.iwin.response.ShareImportQueryResponse">
+		SELECT 
+		  a.id id,
+		  a.product_code productCode,
+		  a.product_name productName,
+		  a.product_id productId,
+		  a.client_name clientName,
+		  a.client_product_id clientProductId,
+		  a.client_type clientType,
+		  a.business_type businessType,
+		  a.confirm_date confirmDate,
+		  CASE WHEN a.confirm_share IS NULL THEN a.confirm_share ELSE ROUND(a.confirm_share,4) END confirmShare,
+		  a.data_source dataSource 
+		FROM
+		  t_share_import a 
+		WHERE 1=1
+	        <if test="productList != null and productList.size > 0">
+				and a.product_id in 
+		    	<foreach item="id" index="index" collection="productList" open="(" separator="," close=")">  
+			            #{id}
+			    </foreach>
+		    </if>
+		     <if test="request.confirmDate != null and request.confirmDate != ''">
+				AND a.confirm_date=#{request.confirmDate,jdbcType=VARCHAR}
+            </if>
+		    <if test="request.productId != null and request.productId != ''">
+				AND a.product_id=#{request.productId,jdbcType=VARCHAR}
+            </if>
+		     <if test="request.dataSource != null and request.dataSource != ''">
+				AND a.data_source=#{request.dataSource,jdbcType=VARCHAR}
+            </if>
+           order by a.product_code
+	</select>
+	
+	<select id="getAllShareList"  resultType="com.quantdo.iwin.entity.ShareImport">
+		SELECT 
+		  a.client_name clientName,
+		  a.client_product_id clientProductId,
+		  a.product_name productName,
+		  a.product_id productId,
+		  a.confirm_date confirmDate,
+		  a.confirm_share confirmShare ,
+		  a.business_type businessType,
+		  a.data_source dataSource
+		FROM
+		  t_share_import a 
+		order by a.confirm_date
+	</select>
+	
+	<delete id="delProductsRelationship" parameterType="map">
+		DELETE FROM t_products_relationship 
+		WHERE parent_product_id IN 
+			<foreach item="id" index="index" collection="productList" open="(" separator="," close=")">  
+			            #{id}
+		    </foreach>
+	</delete>
+	
+	
+	<!-- 资产基金的估值表的市值-->
+	<select id="getParentPendingJobList" parameterType="map" resultType="com.quantdo.iwin.entity.PendingJob">
+		SELECT 
+		  #{beginDate,jdbcType=VARCHAR} date,
+		  a.product_id productID,
+		  #{type,jdbcType=INTEGER} KPIType,
+		  "0" isWorking 
+		FROM
+		  t_product_net_value a  
+		WHERE a.product_id IN(SELECT parent_product_id FROM t_products_relationship WHERE product_id=#{productId,jdbcType=VARCHAR} AND start_date &gt;=#{beginDate,jdbcType=VARCHAR})
+		AND a.date &gt;= #{beginDate,jdbcType=VARCHAR}
+		GROUP BY a.product_id
+	</select>
+
+	<select id="getAllVariety" parameterType="map" resultType="com.quantdo.iwin.entity.Variety">
+		SELECT 
+		  variety0_.variety_id AS varietyID,
+		  variety0_.classify AS classify,
+		  variety0_.exchange_id AS exchangeID,
+		  variety0_.exchange_unit AS exchangeUnit,
+		  variety0_.is_priority AS isPriority,
+		  variety0_.variety_name AS varietyName 
+		FROM
+		  t_variety variety0_ 
+	</select>
+	
+</mapper>

@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.FundRankMapper">
+	<select id="calculateFundRanking" parameterType="map" resultType="com.quantdo.iwin.entity.FundRank">
+		SELECT 
+		  a.date DATE,
+		  a.product_id productID,
+		  ROUND(SUM(IFNULL(a.score, 0)), 2) score,
+		  a.report_id reportId,
+		  NULL ranking,
+		  ROUND(
+		    SUM(IFNULL(ti.invester_equity, 0)),
+		    2
+		  ) investerEquityToday,
+		  ROUND(SUM(IFNULL(ti.tot_profit, 0)), 2) totProfitToday,
+		  ROUND(
+		    SUM(
+		      IFNULL(ti.deposit_withdraw_today, 0)
+		    ),
+		    2
+		  ) depositWithdrawalToday,
+		  temp.until_now accumulativeTradeDays ,
+  		  p.group_id groupId
+		FROM
+		  t_fund_evaluation_report a 
+		  LEFT JOIN t_product_invester_relationship b 
+		    ON a.product_id = b.product_id 
+		  LEFT JOIN t_invester_fund ti 
+		    ON ti.invester_id = b.invester_id 
+		    AND ti.broker_id = b.broker_id 
+		    AND ti.date = a.date 
+		  LEFT JOIN t_product_period_kpi_statistics temp 
+		    ON temp.kpi = '020011' 
+		    AND temp.product_id = a.product_id 
+		    AND a.date = temp.date 
+		  LEFT JOIN t_product p ON a.product_id = p.id
+		WHERE a.report_id = #{kpiCalculationRequest.reportId,jdbcType=VARCHAR}
+			<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+				and a.date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR}   
+			</if>
+			<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+				and a.date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}   
+			</if>
+			and p.group_id  is not null
+		GROUP BY a.product_id,  a.date 
+		ORDER BY score DESC 
+	</select>
+	
+	
+	<!-- 删除综合排名表 -->
+    <delete id="deleteFundRank" parameterType="map">
+		delete from t_fund_rank
+		where 1=1
+		<if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+				and date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+				and date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.reportId  != null and kpiCalculationRequest.reportId != ''">
+				and report_id = #{kpiCalculationRequest.reportId ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 删除指标得分表 -->
+    <delete id="deleteEvaluationReport" parameterType="map">
+		delete from t_fund_evaluation_report
+		where 1=1
+		<if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.beginDate  != null and kpiCalculationRequest.beginDate != ''">
+				and date &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.endDate  != null and kpiCalculationRequest.endDate != ''">
+				and date &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.reportId  != null and kpiCalculationRequest.reportId != ''">
+				and report_id = #{kpiCalculationRequest.reportId ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.kpiType != 0">
+				AND kpi IN 
+					  (SELECT 
+					    a.KPI 
+					  FROM
+					    t_kpi_dictionary a 
+					  WHERE a.type = #{kpiCalculationRequest.kpiType,jdbcType=VARCHAR})
+			</if>
+			<if test="kpiCalculationRequest.kpiCodes != null ">
+				and kpi in
+				<foreach item="kpiCode" index="index" collection="kpiCalculationRequest.kpiCodes" open="(" separator="," close=")">  
+		            #{kpiCode}  
+		  		</foreach>
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 	<select id="calculateFundRankingForYearKpi" parameterType="map" resultType="com.quantdo.iwin.response.ProductRankResponse"> -->
+<!-- 		SELECT  -->
+<!-- 		  temp.date DATE, -->
+<!-- 		  p.product_name investerId, -->
+<!-- 		  p.id productId, -->
+<!-- 		  temp.score score, -->
+<!-- 		  temp.KPI kpi, -->
+<!-- 		  temp.period_type periodType  -->
+<!-- 		FROM -->
+<!-- 		  t_product p  -->
+<!-- 		 LEFT JOIN  -->
+<!-- 		    (SELECT  -->
+<!-- 		      a.date DATE, -->
+<!-- 		      IFNULL(a.score, 0) score, -->
+<!-- 		      a.KPI kpi, -->
+<!-- 		      a.product_id, -->
+<!-- 		      a.period_type  -->
+<!-- 		    FROM -->
+<!-- 		      t_fund_evaluation_report a  -->
+<!-- 		    WHERE a.report_id = #{kpiCalculationRequest.reportId ,jdbcType=VARCHAR} ) temp  -->
+<!-- 		    ON temp.product_id = p.id  -->
+<!-- 		WHERE p.product_status &lt; '3'  -->
+<!-- 		  投资策略  -->
+<!--           <if test="kpiCalculationRequest.strategyList != null and kpiCalculationRequest.strategyList != ''"> -->
+<!--               and  -->
+<!-- 		 	<foreach open="(" separator=" or " close=")" item="item" index="index" collection="kpiCalculationRequest.strategyList"> -->
+<!-- 			   <if test="item != null and item != ''"> -->
+<!-- 					(p.strategy_list like  CONCAT('%', #{item}, '%'))  -->
+<!-- 			   </if> -->
+<!-- 			  </foreach> -->
+<!--           </if> -->
+<!--           <if test="kpiCalculationRequest.isIndependent != null and kpiCalculationRequest.isIndependent != ''"> -->
+<!--               and p.is_independent = #{kpiCalculationRequest.isIndependent,jdbcType=VARCHAR} -->
+<!--           </if> -->
+<!-- 	</select> -->
+
+	<!-- 年化指标综合排名 -->
+	<select id="calculateFundRankingForYearKpi" parameterType="map" resultType="com.quantdo.iwin.response.ProductRankResponse">
+		SELECT 
+		  temp.date DATE,
+		  p.product_name investerId,
+		  p.id productId,
+		  IFNULL(ROUND(temp.score, 2),0) score,
+		  temp.KPI kpi,
+		  temp.period_type periodType,
+		  p.product_status productStatus,
+		  ROUND(temp.origin_score, 2) originScore,
+		  ROUND(temp.average_score, 2) averageScore,
+		  temp.weight weight,
+		  temp.value 
+		FROM
+		  t_product p 
+		  LEFT JOIN (
+			  SELECT 
+	        product_id,
+	        DATE,
+	        score,
+	        origin_score,
+	        average_score,
+	        weight,
+	        VALUE,
+	        KPI,
+	        period_type 
+	      FROM
+	        t_fund_evaluation_report 
+	      WHERE report_id = #{kpiCalculationRequest.reportId ,jdbcType=VARCHAR}
+	      AND DATE = (SELECT DATE FROM t_fund_evaluation_report ORDER BY DATE DESC LIMIT 1)
+		  ) temp 
+		    ON temp.product_id = p.id 
+		WHERE p.product_status &lt; '3' 
+		<!-- SELECT 
+		  temp.date DATE,
+		  p.product_name investerId,
+		  p.id productId,
+		  IFNULL(temp.score,0) score,
+		  temp.KPI kpi,
+		  temp.period_type periodType,
+		  p.product_status productStatus 
+		FROM
+		  t_product p 
+		  LEFT JOIN 
+		    t_fund_evaluation_report temp 
+		    ON temp.product_id = p.id 
+		WHERE p.product_status &lt; '3' 
+		<if test="kpiCalculationRequest.reportId != null and kpiCalculationRequest.reportId != ''">
+		 	 and temp.report_id = #{kpiCalculationRequest.reportId ,jdbcType=VARCHAR}
+		  </if>
+		-->
+		  <!-- 投资策略  -->
+          <if test="kpiCalculationRequest.strategyList != null and kpiCalculationRequest.strategyList != ''">
+              and 
+		 	<foreach open="(" separator=" or " close=")" item="item" index="index" collection="kpiCalculationRequest.strategyList">
+			   <if test="item != null and item != ''">
+					(p.strategy_list like  CONCAT('%', #{item}, '%')) 
+			   </if>
+			  </foreach>
+          </if>
+          <!-- 产品状态  -->
+          <if test="kpiCalculationRequest.statusList != null and kpiCalculationRequest.statusList != ''">
+              and 
+		 	<foreach open="(" separator=" or " close=")" item="item" index="index" collection="kpiCalculationRequest.statusList">
+			   <if test="item != null and item != ''">
+					(p.product_status =#{item} ) 
+			   </if>
+			  </foreach>
+          </if>
+          <if test="kpiCalculationRequest.isIndependent != null and kpiCalculationRequest.isIndependent != ''">
+              and p.is_independent = #{kpiCalculationRequest.isIndependent,jdbcType=VARCHAR}
+          </if>
+	</select>
+</mapper>

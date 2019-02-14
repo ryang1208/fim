@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.FundSearchSimulationMapper">
+	
+	<select id="getFundSimulationList" parameterType="map" resultType="com.quantdo.iwin.response.FundSearchSimulationResponse">
+		select 
+		  p.id productId,
+		  p.product_name productName,
+		  IFNULL(p.strategy_list, '') strategyList,
+		  p.initial_asset initialAsset,
+		  concat(p.duration_begin_date,'~',p.duration_end_date) duration,
+		  netValue.net_accumulative_value netAccumulativeValue,
+		  round(yieldTemp.yieldData ,4)yieldData,
+		  ROUND(IFNULL( abs(maxDrawndownTemp.maxDrawndown *100), maxDrawndownTemp.maxDrawndown),4)maxDrawndownData ,
+		  sharpTemp.sharpData
+		from
+		  t_simulation_product p 
+		  left join 
+		    (select 
+		      temp.product_id,
+		      temp.net_accumulative_value 
+		    from
+		      (select 
+		        a.date,
+		        a.product_id,
+		        a.net_accumulative_value 
+		      from
+		        t_simulation_product_net_value a 
+		      group by a.date desc,
+		        a.product_id) temp 
+		    group by temp.product_id) netValue 
+		    on p.id = netValue.product_id 
+		  left join 
+		    (select 
+		      temp.product_id,
+		      temp.yieldData 
+		    from
+		      (select 
+		        a.date,
+		        a.product_id,
+		        case
+		          when #{request.yieldRatio,jdbcType=VARCHAR} = '1' 
+		          then a.one_month 
+		          when #{request.yieldRatio,jdbcType=VARCHAR} = '2' 
+		          then a.three_month 
+		          when #{request.yieldRatio,jdbcType=VARCHAR} = '3' 
+		          then a.six_month 
+		          when #{request.yieldRatio,jdbcType=VARCHAR} = '4' 
+		          then a.one_year 
+		          when #{request.yieldRatio,jdbcType=VARCHAR} = '5' 
+		          then a.this_year 
+		          else
+		          a.until_now 
+		        end yieldData 
+		      from
+		        t_simulation_product_period_kpi_statistics a 
+		      where a.KPI = 020032 
+		      group by a.date desc,
+		        a.product_id) temp 
+		    group by temp.product_id) yieldTemp 
+		    on yieldTemp.product_id = p.id 
+		  left join 
+		    (SELECT 
+		      MIN(a.until_now) maxDrawndown,
+		      a.product_id 
+		    FROM
+		      t_simulation_product_period_kpi_statistics a 
+		    WHERE a.kpi = 030033 
+		    GROUP BY a.product_id) maxDrawndownTemp 
+		    on maxDrawndownTemp.product_id = p.id 
+		  left join
+		   (select 
+		      temp.product_id,
+		      temp.sharpData 
+		    from
+		      (select 
+		        a.date,
+		        a.product_id,
+		        case
+		          when #{request.sharpRatio,jdbcType=VARCHAR} = '1' 
+		          then a.one_month 
+		          when #{request.sharpRatio,jdbcType=VARCHAR} = '2' 
+		          then a.three_month 
+		          when #{request.sharpRatio,jdbcType=VARCHAR} = '3' 
+		          then a.six_month 
+		          when #{request.sharpRatio,jdbcType=VARCHAR} = '4' 
+		          then a.one_year 
+		          when #{request.sharpRatio,jdbcType=VARCHAR} = '5' 
+		          then a.this_year 
+		          else
+		          a.until_now 
+		        end sharpData 
+		      from
+		        t_simulation_product_period_kpi_statistics a 
+		      where a.KPI = 030007 
+		      group by a.date desc,
+		        a.product_id) temp 
+		    group by temp.product_id) sharpTemp 
+		    on sharpTemp.product_id = p.id 
+		where 1=1 
+		<if test="request != null">
+			<!-- 创建人ID -->
+				<if test="request.createUserId != null and request.createUserId !=''">
+			         and p.create_user_id = #{request.createUserId,jdbcType=VARCHAR}  
+				</if>
+			<!-- 产品名称 -->
+			<if test="request.productName != null and request.productName !=''">
+		         and p.product_name like  CONCAT('%',#{request.productName,jdbcType=VARCHAR}, '%')  
+			</if>
+			<!-- 产品存续期 -->
+			<if test="request.beginDate != null and request.beginDate !=''">
+		         and p.duration_begin_date &gt;=#{request.beginDate,jdbcType=VARCHAR}
+		         and p.duration_end_date &gt;=#{request.beginDate,jdbcType=VARCHAR}
+			</if>
+			<if test="request.endDate != null and request.endDate !=''">
+		         and p.duration_begin_date &lt;=#{request.endDate,jdbcType=VARCHAR}
+		         and p.duration_end_date &lt;=#{request.endDate,jdbcType=VARCHAR}
+			</if>
+			
+			<!-- 收益率 -->
+			<if test="request.yieldRatioBegin != null and request.yieldRatioBegin !=''">
+				and yieldTemp.yieldData &gt;=#{request.yieldRatioBegin,jdbcType=VARCHAR}
+			</if>
+			<if test="request.yieldRatioEnd != null and request.yieldRatioEnd !=''">
+				and yieldTemp.yieldData &lt;=#{request.yieldRatioEnd,jdbcType=VARCHAR}
+			</if>
+			
+			<!-- 最大回撤率 -->
+			<if test="request.drawDownRatioBegin != null and request.drawDownRatioBegin !=''">
+				and abs(maxDrawndownTemp.maxDrawndown) &gt;=#{request.drawDownRatioBegin,jdbcType=VARCHAR}
+			</if>
+			<if test="request.drawDownRatioEnd != null and request.drawDownRatioEnd !=''">
+				and abs(maxDrawndownTemp.maxDrawndown) &lt;=#{request.drawDownRatioEnd,jdbcType=VARCHAR}
+			</if>
+			
+			<!-- sharp比率 -->
+			<if test="request.sharpRatioBegin != null and request.sharpRatioBegin !=''">
+				and sharpTemp.sharpData &gt;=#{request.sharpRatioBegin,jdbcType=VARCHAR}
+			</if>
+			<if test="request.sharpRatioEnd != null and request.sharpRatioEnd !=''">
+				and sharpTemp.sharpData &lt;=#{request.sharpRatioEnd,jdbcType=VARCHAR}
+			</if>
+			
+			<!-- 发行规模 -->
+			<if test="request.initialAssetList != null ">
+				AND 
+				<foreach open="(" separator=" or " close=")" item="item" index="index" collection="request.initialAssetList">
+					<if test="item.begin != null">
+						(p.initial_asset &gt;=#{item.begin} ) 
+					</if>
+					<if test="item.end != null">
+						AND (p.initial_asset &lt;#{item.end})
+					</if>
+				</foreach>
+			</if>
+			
+			<!-- 投资策略  -->
+            <if test="request.strategyList != null and request.strategyList != ''">
+                and 
+                <foreach open="(" separator=" or " close=")" item="item" index="index" collection="request.strategyList">
+				   <if test="item != null and item != ''">
+						(p.strategy_list like  CONCAT('%', #{item}, '%')) 
+				   </if>
+				</foreach>
+            </if>
+        </if>
+	</select>
+	
+	<!-- 获取最新制定指标数据 -->
+	<select id="getLastKpiInfo" parameterType="map" resultType="com.quantdo.iwin.response.SimulationProductResponse">
+		SELECT 
+		  a.product_name,
+		  a.id,
+		  ROUND(IFNULL(yieldTemp.until_now*100,yieldTemp.until_now),4) yieldRatio,  
+		  ROUND(voliTemp.until_now*100,4) volatilityRatio,
+		  ROUND(sharpTemp.until_now,4) sharpRatio
+		FROM
+		  t_simulation_product a 
+		LEFT JOIN (SELECT  b.product_id,b.until_now FROM t_simulation_product_period_kpi_statistics b WHERE b.product_id=#{productId,jdbcType=VARCHAR} AND b.KPI=030002 ORDER BY b.date DESC LIMIT 1) yieldTemp
+		ON yieldTemp.product_id = a.id
+		LEFT JOIN (SELECT  b.product_id,b.until_now FROM t_simulation_product_period_kpi_statistics b WHERE b.product_id=#{productId,jdbcType=VARCHAR} AND b.KPI=040008 ORDER BY b.date DESC LIMIT 1) voliTemp
+		ON voliTemp.product_id = a.id
+		LEFT JOIN (SELECT  b.product_id,b.until_now FROM t_simulation_product_period_kpi_statistics b WHERE b.product_id=#{productId,jdbcType=VARCHAR} AND b.KPI=030007 ORDER BY b.date DESC LIMIT 1) sharpTemp
+		ON sharpTemp.product_id = a.id
+		WHERE a.id=#{productId,jdbcType=VARCHAR}
+	</select>
+	
+	<!-- 获取收益率图表 -->
+	<select id="getYieldList" parameterType="map" resultType="com.quantdo.iwin.response.SimulationProductResponse">
+		SELECT 
+		  a.date DATE,
+		  a.product_id productId,
+		  round(a.today*100,2) DATA 
+		FROM
+		  t_simulation_product_period_kpi_statistics a 
+		WHERE a.KPI = 020032 
+		  AND a.product_id = #{productId,jdbcType=VARCHAR} 
+		  <if test="beginDate != null and beginDate != ''">
+		  	and a.date &gt;= #{beginDate,jdbcType=VARCHAR} 
+		  </if>
+		  <if test="endDate != null and endDate != ''">
+	  		and a.date &lt;= #{endDate,jdbcType=VARCHAR} 
+	  	  </if>
+		ORDER BY DATE 
+	</select>
+	
+	<!-- 净值图表 -->
+	<select id="getNetValueList" parameterType="map" resultType="com.quantdo.iwin.response.SimulationProductResponse">
+		SELECT 
+		  product_id productId,
+		  DATE DATE,
+		  net_accumulative_value DATA
+		FROM
+		  t_simulation_product_net_value 
+		WHERE product_id = #{productId,jdbcType=VARCHAR} 
+		<if test="beginDate != null and beginDate != ''">
+		  	and date &gt;= #{beginDate,jdbcType=VARCHAR} 
+		  </if>
+		  <if test="endDate != null and endDate != ''">
+	  		and date &lt;= #{endDate,jdbcType=VARCHAR} 
+	  	  </if>
+	  	ORDER BY DATE 
+	</select>
+	
+	<!-- 获取回撤率图表 -->
+	<select id="getDrawndownList" parameterType="map" resultType="com.quantdo.iwin.response.SimulationProductResponse">
+		SELECT 
+		  a.date DATE,
+		  a.product_id productId,
+		  round(a.until_now*100,2) DATA,
+		  maxDataTemp.maxData maxData 
+		FROM
+		  t_simulation_product_period_kpi_statistics a 
+		  LEFT JOIN 
+		    (SELECT round(MIN(b.until_now)*100,2)  maxData FROM t_simulation_product_period_kpi_statistics b WHERE b.KPI = 030033 
+	 			and b.product_id = #{productId,jdbcType=VARCHAR} 
+	 			<if test="beginDate != null and beginDate != ''">
+				  	and b.date &gt;= #{beginDate,jdbcType=VARCHAR} 
+	 			</if>
+	 			<if test="endDate != null and endDate != ''">
+			  		and b.date &lt;= #{endDate,jdbcType=VARCHAR} 
+			  	</if>
+			  	) maxDataTemp 
+		    ON 1 = 1 
+		WHERE a.KPI = 030033 
+		  AND a.product_id = #{productId,jdbcType=VARCHAR} 
+		  <if test="beginDate != null and beginDate != ''">
+		  	and a.date &gt;= #{beginDate,jdbcType=VARCHAR} 
+		  </if>
+		  <if test="endDate != null and endDate != ''">
+	  		and a.date &lt;= #{endDate,jdbcType=VARCHAR} 
+	  	  </if>
+		ORDER BY DATE 
+	</select>
+</mapper>

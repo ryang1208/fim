@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisProductRiskValueMapper">
+	
+	<!-- 资产基金的估值表的市值-->
+	<select id="rikeValueMarketValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT b.date DATE,b.asset_value today 
+		FROM  t_product_net_value b 
+		WHERE b.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+		ORDER BY b.date
+	</select>
+	
+	<!-- 股票投资-->
+	<select id="netAssetValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+	  SELECT 
+		  tt.date DATE,
+		  tt.market_capitalization today
+		FROM
+		  t_fund_valuation_table tt 
+		 WHERE tt.account_name='股票投资' 
+		 <if test="kpiCalculationRequest.productId  != null and  kpiCalculationRequest.productId != ''">
+			AND tt.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+		</if>
+	</select>
+</mapper>

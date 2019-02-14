@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisCapitalUseRatioMapper">
+	<select id="calculatCapitalUseRatioByPeriod" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  ti. DATE  DATE,
+		  tp. product_id  productID,
+		  #{kpiCalculationRequest.kpi ,jdbcType=VARCHAR}  kpi,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR}  dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL untilNow,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  ROUND( case when (ti. invester_equity  - IFNULL(inMoney.incomeMoney, 0)) = 0 then 99999
+		  else 
+		    IFNULL(ti. margin_occupied ,0)  / (
+		      ti. invester_equity  - IFNULL(inMoney.incomeMoney, 0)
+		    ) end,
+		    8
+		  ) today 
+		FROM
+		  t_invester_fund ti 
+		  LEFT JOIN  t_product_invester_relationship  tp 
+		    ON ti. invester_id  = tp. invester_id  
+		    and tp.broker_id = ti.broker_id
+ 			and tp.invester_type = '1'
+		    LEFT JOIN 
+		    (SELECT 
+		      t.invester_id investerId,
+		      t.broker_id brokerId,
+		      t.date DATE,
+		      SUM(
+		        CASE
+		          WHEN t.type_deposit_withdrawal = '1' 
+		          THEN IFNULL(t.deposit, 0) 
+		          ELSE 0 
+		        END
+		      ) incomeMoney 
+		    FROM
+		      t_invester_deposit_withdrawal t 
+		    WHERE t.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		    GROUP BY t.invester_id,t.broker_id) inMoney 
+		    ON inMoney.investerId = ti.invester_id 
+		    and inMoney.brokerId = ti.broker_id
+		    AND inMoney.date = ti.date 
+		WHERE ti.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}  
+		  <if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and tp.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+		 </if>
+	</select>
+	
+</mapper>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.OrganizationMapper">
+	
+	<!-- 机构管理条件查询 -->
+	<select id="getOrganizationListByCondition" parameterType="map" resultType="com.quantdo.iwin.entity.Organization">
+		SELECT 
+		  id id,
+		  organization_name organizationName 
+		FROM
+		  t_organization 
+		WHERE 1=1
+			<if test="request.organizationName != null and request.organizationName !='' ">
+				and organization_name like  CONCAT('%',#{request.organizationName,jdbcType=VARCHAR}, '%')
+			</if>
+			order by organization_name
+	</select>	
+	
+	<select id="getUnSelectedOrganizationList" parameterType="map" resultType="com.quantdo.iwin.entity.Organization">
+		SELECT 
+		  id,
+		  organization_name organizationName 
+		FROM
+		  t_organization a 
+		WHERE a.id NOT IN 
+		  (SELECT 
+		    organization_id 
+		  FROM
+		    t_user_organization_data_authority 
+		  WHERE user_id = #{userId,jdbcType=VARCHAR})
+	  </select>
+	  
+	<select id="findByUserId" parameterType="map" resultType="com.quantdo.iwin.entity.UserOrganizationDataAuthority">
+		SELECT 
+		  a.authority,
+		  a.organization_id organizationId,
+		  a.organization_type organizationType,
+		  a.user_id userId,
+		  b.organization_name organizationName,
+		  b.id id 
+		FROM
+		  t_user_organization_data_authority a 
+		  LEFT JOIN t_organization b 
+		    ON a.organization_id = b.id 
+		WHERE a.user_id  = #{userId,jdbcType=VARCHAR}
+	</select>
+</mapper>
+ 

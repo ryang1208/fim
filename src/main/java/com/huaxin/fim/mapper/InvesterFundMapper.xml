@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.InvesterFundMapper">
+	
+	<select id="getByInvesterIDandBrokerID" parameterType="map" resultType="com.quantdo.iwin.entity.InvesterFund">
+		SELECT t.date DATE, 
+			t.invester_id  investerID, 
+			broker_id brokerID, 
+			invester_equity investerEquity, 
+			accumulated_profit accumulatedProfit, 
+			close_profit closeProfit, 
+			(SELECT SUM(IFNULL(commission,0))  FROM t_transaction_details d WHERE d.date =t.date AND d.invester_id = t.invester_id AND d.broker_id = t.broker_id AND d.data_source= t.data_source ) commissionToady, 
+			cash_frozen cashFrozen, 
+			(SELECT SUM(IFNULL(margin,0)) FROM t_position_summary s WHERE s.date = t.date AND s.invester_id = t.invester_id AND s.broker_id = t.broker_id AND s.data_source = t.data_source  ) marginOccupied, 
+			available available, 
+			balance_today balanceToday, 
+			balance_yesterday balanceYesterday, 
+			risk_degree riskDegree, 
+			(SELECT SUM(IFNULL(w.deposit,0)-ABS(IFNULL(w.withdrawal,0))) FROM t_invester_deposit_withdrawal w WHERE w.date = t.date AND w.invester_id = t.invester_id AND w.broker_id = t.broker_id AND w.data_source = t.data_source 
+			) depositWithdrawToday, 
+			monetary_offsetting_amount monetaryOffsettingAmount, 
+			non_monetary_offsetting_amount nonMonetaryOffsettingAmount, 
+			currency currency, 
+			margin_call marginCall, 
+			premium_today premiumToday, 
+			data_source dataSource, 
+			tot_profit totProfit 
+			FROM t_invester_fund t
+			where 1=1
+			<if test="investerFund.investerID  != null and investerFund.investerID != ''">
+				and t.invester_id = #{investerFund.investerID ,jdbcType=VARCHAR}
+			</if>
+			<if test="investerFund.brokerID  != null and investerFund.brokerID != ''">
+				and t.broker_id = #{investerFund.brokerID ,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+	<select id="getInvesterFund" parameterType="map" resultType="com.quantdo.iwin.entity.InvesterFund">
+		  SELECT invester_fund.date DATE,
+		  invester_fund.invester_id investerID,
+		  invester_fund.broker_id brokerID,
+		  invester_fund.invester_equity investerEquity,
+		  invester_fund.accumulated_profit accumulatedProfit,
+		  IFNULL(transaction_summary.close_profit,0) closeProfit,
+		  transaction_summary.commission commissionToady,
+		  invester_fund.cash_frozen cashFrozen,
+		  position_summary.margin marginOccupied,
+		  invester_fund.available available,
+		  invester_fund.balance_today balanceToday,
+		  invester_fund.balance_yesterday balanceYesterday,
+		  invester_fund.risk_degree riskDegree,
+		  depositWithdrawToday.deposit_withdraw_today  depositWithdrawToday,
+		  invester_fund.currency currency,
+		  invester_fund.margin_call marginCall,
+		  invester_fund.premium_today premiumToday,
+		  invester_fund.data_source dataSource,
+		  invester_fund.monetary_offsetting_amount monetaryOffsettingAmount,
+		  invester_fund.non_monetary_offsetting_amount nonMonetaryOffsettingAmount,
+		  invester_fund.tot_profit totProfit
+		FROM
+		  t_invester_fund invester_fund 
+		  LEFT JOIN (SELECT DATE,invester_id , broker_id,SUM(commission) commission,SUM(close_profit) close_profit FROM t_transaction_summary  GROUP BY invester_id,broker_id,DATE)transaction_summary
+		    ON invester_fund.broker_id = transaction_summary.broker_id 
+		    AND invester_fund.date = transaction_summary.date 
+		    AND invester_fund.invester_id = transaction_summary.invester_id 
+		  LEFT JOIN (SELECT broker_id,DATE,invester_id,SUM(margin) margin FROM t_position_summary GROUP BY broker_id,DATE,invester_id) position_summary 
+		    ON invester_fund.broker_id = position_summary.broker_id 
+		    AND invester_fund.date = position_summary.date 
+		    AND invester_fund.invester_id = position_summary.invester_id 
+		  LEFT JOIN(
+		  SELECT broker_id,DATE,invester_id,SUM(IFNULL(w.deposit,0)-ABS(IFNULL(w.withdrawal,0))) deposit_withdraw_today FROM t_invester_deposit_withdrawal w  GROUP BY  invester_id,broker_id,DATE  		   
+		  ) depositWithdrawToday
+		  ON invester_fund.broker_id = depositWithdrawToday.broker_id 
+		  AND invester_fund.date = depositWithdrawToday.date 
+		  AND invester_fund.invester_id = depositWithdrawToday.invester_id
+		WHERE invester_fund.date IS NOT NULL 
+		  AND (
+		    invester_fund.commission_toady IS NULL 
+		    OR invester_fund.margin_occupied IS NULL 
+		    OR invester_fund.close_profit IS NULL
+		  ) 
+		  AND invester_fund.tot_profit IS NULL 
+	</select>
+	
+	<!-- 从估值表中获取资金信息列表 -->
+	<select id="getInvesterFundFromValuation" parameterType="map" resultType="com.quantdo.iwin.entity.InvesterFund">
+		SELECT 
+		  #{investerId,jdbcType=VARCHAR} investerID,
+		  #{brokerId,jdbcType=VARCHAR} brokerID,
+		  t.date DATE,
+		  ROUND(SUM(IFNULL(t.market_capitalization,0)),4) available,
+		  '9' dataSource,
+		  ROUND((temp.cost + SUM(IFNULL(t.cost, 0))),4) investerEquity,
+		  ROUND(temp.cost,4) marginOccupied,
+		  ROUND(
+		    temp.cost / (temp.cost + IFNULL(t.cost, 0)),
+		    4
+		  ) riskDegree,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate
+		FROM
+		  t_fund_valuation_table t 
+		  INNER JOIN 
+		    (SELECT 
+		      a.date,
+		      a.product_id,
+		      SUM(IFNULL(a.cost, 0)) cost 
+		    FROM
+		      t_fund_valuation_table a 
+		    WHERE CHAR_LENGTH(a.account_code) = 8 
+		      AND LEFT(a.account_code, 4) = '1031' 
+		      and a.product_id = #{productId,jdbcType=VARCHAR}  
+		      and a.date = #{date,jdbcType=VARCHAR} 
+		      and a.trustee_id = #{trusteeId,jdbcType=VARCHAR}   
+		      AND LOCATE("期货", a.account_name) > 0) temp 
+		    ON t.date = temp.date 
+		    AND t.product_id = temp.product_id 
+		WHERE t.product_id = #{productId,jdbcType=VARCHAR}  
+		  AND t.date = #{date,jdbcType=VARCHAR} 
+		  AND CHAR_LENGTH(t.account_code) = 8 
+		  AND LEFT(t.account_code, 4) = '1021' 
+		  AND LOCATE("期货", t.account_name) > 0 
+		  AND t.trustee_id = #{trusteeId,jdbcType=VARCHAR}
+		  GROUP BY t.product_id 
+	</select>
+</mapper>

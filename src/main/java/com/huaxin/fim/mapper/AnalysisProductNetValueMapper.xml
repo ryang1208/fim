@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisProductNetValueMapper">
+    
+	<select id="findYieldRateList" parameterType="map" resultType="com.quantdo.iwin.response.ProductNetValueResponse">
+		SELECT 
+		  a.date today,
+		  a.net_asset_value netAssetValue,
+		  a.net_accumulative_value netAcumulativeValue,
+		  date_format(
+		    DATE_SUB(a.date, INTERVAL 1 MONTH),
+		    '%Y%m%d'
+		  ) oneMonthDate,
+		  DATE_FORMAT(
+		    DATE_SUB(a.date, INTERVAL 3 MONTH),
+		    '%Y%m%d'
+		  ) threeMonthDate,
+		  DATE_FORMAT(
+		    DATE_SUB(a.date, INTERVAL 6 MONTH),
+		    '%Y%m%d'
+		  ) sixMonthDate,
+		  DATE_FORMAT(
+		    DATE_SUB(a.date, INTERVAL 1 year),
+		    '%Y%m%d'
+		  ) oneYearDate,
+		  DATE_FORMAT(
+		    CONCAT(date_format(a.date, '%Y'), '0101'),
+		    '%Y%m%d'
+		  ) thisYearDate
+		FROM
+		  t_product_net_value a 
+		WHERE a.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+		order by a.date
+	</select>
+	
+	<delete id="deleteDateAndProductIDAndKPI" parameterType="map">
+		delete from t_product_period_kpi_statistics where date = #{productPeriodKPIStatistics.date ,jdbcType=VARCHAR}
+	<if test="productPeriodKPIStatistics != null">
+		<if test="productPeriodKPIStatistics.productID  != null and productPeriodKPIStatistics.productID != ''">
+			and product_id = #{productPeriodKPIStatistics.productID ,jdbcType=VARCHAR}
+		</if>
+		<if test="productPeriodKPIStatistics.KPI  != null and productPeriodKPIStatistics.KPI  != ''">
+			and KPI = #{productPeriodKPIStatistics.KPI ,jdbcType=VARCHAR}
+		</if>
+	
+	</if>
+	</delete>
+	
+	<select id="getProductCreateDate" parameterType="map" resultType="String">
+		select min(create_date) create_date from t_product
+		<if test="analysisProductPeriod != null">
+			where create_date &lt;&gt; '' and create_date is not null
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and id = #{productPeriodKPIStatistics.productID ,jdbcType=VARCHAR}
+			</if>
+		</if>
+	</select>
+		
+	<select id="findCurrentMaxNetValueList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		<if test="analysisProductPeriod != null">
+			SELECT base.date,base.product_id productID,
+				#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+				#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+				DATE_FORMAT( current_date(), '%Y%m%d') statDate,
+				null today,
+				null oneMonth,
+				null threeMonth,
+				null sixMonth,
+				null oneYear,
+					(case when (p.create_date &gt; #{analysisProductPeriod.statDate,jdbcType=VARCHAR} or periodlist.date &gt; #{analysisProductPeriod.statDate,jdbcType=VARCHAR}) then null 
+					when ((p.create_date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} or periodlist.date &lt; #{analysisProductPeriod.statDate,jdbcType=VARCHAR}) and periodlist.until_now &gt; base.net_accumulative_value) then periodlist.until_now 
+					when ((p.create_date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} or periodlist.date &lt; #{analysisProductPeriod.statDate,jdbcType=VARCHAR}) and periodlist.until_now &lt;= base.net_accumulative_value) then base.net_accumulative_value 
+					else base.net_accumulative_value end) untilNow,
+				null thisYear 
+				from t_product_net_value base 
+				left join (select * from (select product_id,until_now,date FROM t_product_period_kpi_statistics WHERE DATE &lt;#{analysisProductPeriod.statDate,jdbcType=VARCHAR} AND KPI = '020041' GROUP BY product_id,DATE DESC)X group by product_id)periodlist on periodlist.product_id = base.product_id 
+				left join t_product p on base.product_id = p.id
+			where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and base.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+		</if>
+	
+	</select>
+	
+	<select id="findYearYieldRateList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		select base.date date,base.product_id productID,
+			#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+			#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+			DATE_FORMAT( current_date(), '%Y%m%d') statDate,
+			null today,
+			truncate(pow((1+oneMonthList.averageYeildRate),tradeDaysList.tradeDays)-1,8) oneMonth,
+			truncate(pow((1+threeMonthList.averageYeildRate),tradeDaysList.tradeDays)-1,8) threeMonth,
+			truncate(pow((1+sixMonthList.averageYeildRate),tradeDaysList.tradeDays)-1,8) sixMonth,
+			truncate(pow((1+oneYearList.averageYeildRate),tradeDaysList.tradeDays)-1,8) oneYear,
+			truncate(pow((1+untilNowList.averageYeildRate),tradeDaysList.tradeDays)-1,8) untilNow,
+			truncate(pow((1+thisYearList.averageYeildRate),tradeDaysList.tradeDays)-1,8) thisYear
+		from t_product_period_kpi_statistics base 
+		left join (select product_id,sum(today)/count(today) averageYeildRate from t_product_period_kpi_statistics where KPI = '020032' and date &gt; #{analysisProductPeriod.oneMonth,jdbcType=VARCHAR} and date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by product_id)oneMonthList on base.product_id = oneMonthList.product_id
+		left join (select product_id,sum(today)/count(today) averageYeildRate from t_product_period_kpi_statistics where KPI = '020032' and date &gt; #{analysisProductPeriod.threeMonth,jdbcType=VARCHAR} and date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by product_id)threeMonthList on base.product_id = threeMonthList.product_id
+		left join (select product_id,sum(today)/count(today) averageYeildRate from t_product_period_kpi_statistics where KPI = '020032' and date &gt; #{analysisProductPeriod.sixMonth,jdbcType=VARCHAR} and date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by product_id)sixMonthList on base.product_id = sixMonthList.product_id
+		left join (select product_id,sum(today)/count(today) averageYeildRate from t_product_period_kpi_statistics where KPI = '020032' and date &gt; #{analysisProductPeriod.oneYear,jdbcType=VARCHAR} and date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by product_id)oneYearList on base.product_id = oneYearList.product_id
+		left join (select product_id,sum(today)/count(today) averageYeildRate from t_product_period_kpi_statistics where KPI = '020032' and date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR}  group by product_id)untilNowList on base.product_id = untilNowList.product_id
+		left join (select product_id,sum(today)/count(today) averageYeildRate from t_product_period_kpi_statistics where KPI = '020032' and date &gt; #{analysisProductPeriod.thisYear,jdbcType=VARCHAR} and date &lt;= #{analysisProductPeriod.statDate,jdbcType=VARCHAR} group by product_id)thisYearList on base.product_id = thisYearList.product_id
+		join (select dic.data_value tradeDays from t_iwin_data_dictionary dic where dic.data_type = 'TotalTradeDays' and data_code = SUBSTR(#{analysisProductPeriod.statDate,jdbcType=VARCHAR} ,1,4)) tradeDaysList
+		where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR} 
+			and KPI = '020032'
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and base.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+	<!-- 当前连续上涨天数（正为上涨，负为下跌） -->
+	<select id="calculateCurrentContinuousRiseDays" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  p.date DATE,
+		  p.product_id productID,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  CASE
+		    WHEN yesterdayNetValue.net_accumulative_value IS NULL 
+		    THEN 0 
+		    ELSE (
+		      CASE
+		        WHEN p.net_accumulative_value &gt; yesterdayNetValue.net_accumulative_value 
+		        THEN (
+		          CASE
+		            WHEN yesterdayKpi.until_Now &gt;= 0 
+		            THEN yesterdayKpi.until_Now + 1 
+		            ELSE 0 
+		          END
+		        ) 
+		        WHEN p.net_accumulative_value &lt; yesterdayNetValue.net_accumulative_value 
+		        THEN (
+		          CASE
+		            WHEN yesterdayKpi.until_Now &lt;= 0 
+		            THEN yesterdayKpi.until_Now - 1 
+		            ELSE 0 
+		          END
+		        ) 
+		        ELSE 0 
+		      END
+		    ) 
+		  END untilNow,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  NULL today 
+		FROM
+		  t_product_net_value p 
+		  LEFT JOIN 
+		    (SELECT 
+		      temp.product_id,
+		      temp.net_accumulative_value 
+		    FROM
+		      (SELECT 
+		        a.product_id,
+		        a.net_accumulative_value 
+		      FROM
+		        t_product_net_value a 
+		      WHERE a.date &lt; #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		      GROUP BY a.product_id,a.date DESC) temp 
+		    GROUP BY temp.product_id) yesterdayNetValue 
+		    ON yesterdayNetValue.product_id = p.product_id 
+	  LEFT JOIN 
+	    (SELECT 
+	      * 
+	    FROM
+	      (SELECT 
+	        * 
+	      FROM
+	        t_product_period_kpi_statistics a 
+	      WHERE a.date &lt; #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+	        AND a.kpi = '030054' 
+	      GROUP BY a.product_id,
+	        a.date DESC) temp 
+	    GROUP BY temp.product_id) yesterdayKpi 
+	    ON yesterdayKpi.product_id = p.product_id 
+		WHERE p.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  <if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and p.product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+		  </if>
+	</select>
+	
+	<!-- 计算历史连续上涨（下跌）最大天数 -->
+	<select id="calculateMaxRiseOrFailDays" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  tp.date DATE,
+		  tp.product_id productID,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  tp.until_now untilNow 
+		FROM
+		  t_product_period_kpi_statistics tp 
+		WHERE tp.product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		  AND tp.kpi = '030054' 
+	</select>
+</mapper>

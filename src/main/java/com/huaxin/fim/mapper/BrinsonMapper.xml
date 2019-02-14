@@ -1,0 +1,513 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.BrinsonMapper">
+
+	<!-- 删除产品行业周期统计表 -->
+    <delete id="delIndustryPeriod" parameterType="map">
+		delete from t_product_industry_period_statistics
+		where 1=1
+		<if test="profitAndLossCalculationRequest != null">
+			<if test="profitAndLossCalculationRequest.beginDate  != null and profitAndLossCalculationRequest.beginDate != ''">
+				and date &gt;= #{profitAndLossCalculationRequest.beginDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="profitAndLossCalculationRequest.endDate  != null and profitAndLossCalculationRequest.endDate != ''">
+				and date &lt;= #{profitAndLossCalculationRequest.endDate ,jdbcType=VARCHAR}
+			</if>
+			<if test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+				and product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+			<if test="profitAndLossCalculationRequest.kpiType != 0">
+				AND kpi IN 
+					  (SELECT 
+					    a.KPI 
+					  FROM
+					    t_kpi_dictionary a 
+					  WHERE a.type = #{profitAndLossCalculationRequest.kpiType,jdbcType=VARCHAR})
+			</if>
+			<if test="profitAndLossCalculationRequest.kpiCodes != null ">
+				and kpi in
+				<foreach item="kpiCode" index="index" collection="profitAndLossCalculationRequest.kpiCodes" open="(" separator="," close=")">  
+		            #{kpiCode}  
+		  		</foreach>
+			</if>
+		</if>
+	</delete>
+	
+	<!-- 计算基准收益率指标 -->
+	<select id="calculateBaseYieldRate" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT 
+		  ti.date DATE,
+		  ti.index_id productId,
+		  ti.industry industry,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL untilNow,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  ROUND(ti.base_yield_rate, 8) today
+		FROM
+		  t_index_content ti 
+		WHERE ti.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		<if test="kpiCalculationRequest.indexId != null and kpiCalculationRequest.indexId != ''">
+			and ti.index_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<!-- 计算基准权重指标 -->
+	<select id="calculateBaseWeight" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT 
+		  ti.date DATE,
+		  ti.index_id productId,
+		  ti.industry industry,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL untilNow,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  ROUND(ti.base_weight, 8) today 
+		FROM
+		  t_index_content ti 
+		WHERE ti.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}
+		<if test="kpiCalculationRequest.indexId != null and kpiCalculationRequest.indexId != ''">
+			and ti.index_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<!-- 组合权重 -->
+	<select id="calculatePortfolioWeight" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT 
+		  p.date DATE,
+		  tp.product_id productId,
+		  p.industry industry,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL untilNow,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  ROUND(sum(ifnull(p.market_capitalization,0)) / totalMarketValue.totalValue,
+		    8
+		  ) today 
+		FROM
+		  t_position_summary p 
+		  LEFT JOIN t_product_invester_relationship tp 
+		    ON tp.invester_id = p.invester_id 
+		    AND tp.broker_id = p.broker_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      b.product_id,
+		      SUM(
+		        CASE
+		          WHEN a.market_capitalization IS NULL 
+		          THEN 0 
+		          ELSE a.market_capitalization 
+		        END
+		      ) totalValue 
+		    FROM
+		      t_position_summary a 
+		      LEFT JOIN t_product_invester_relationship b 
+		        ON a.invester_id = b.invester_id 
+		        AND a.broker_id = b.broker_id 
+		    WHERE a.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		     and a.industry is not null and a.market_type='2'
+		    GROUP BY b.product_id) totalMarketValue 
+		    ON tp.product_id = totalMarketValue.product_id 
+		WHERE DATE = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  AND p.industry IS NOT NULL 
+		  and p.market_type = '2'
+		  <if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and tp.product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+		  </if>
+		  group by p.industry
+	</select>
+	
+	<!-- 组合收益率 -->
+	<select id="calculatePortfolioYield" parameterType="map" resultType="com.quantdo.iwin.entity.PositionSummary">
+		SELECT 
+		  DATE DATE,
+		  invester_id investerID,
+		  contact contact,
+		  industry industry,
+		  SUM(market_capitalization) marketCapitalization,
+		  SUM(ori_margin) oriMargin,
+		  SUM(position_buy) positionBuy,
+		  SUM(settlementPrice_today) settlementPriceToday,
+		  SUM(price_buy) priceBuy 
+		FROM
+		  t_position_summary 
+		WHERE invester_id IN 
+		  (SELECT 
+		    invester_id 
+		  FROM
+		    t_product_invester_relationship 
+		  WHERE product_id = #{request.productId,jdbcType=VARCHAR}  
+		    AND invester_type = '2') 
+		    AND industry IS NOT NULL 
+	 	    AND market_type='2'
+	 	    AND date &lt;= #{request.endDate,jdbcType=VARCHAR}
+	 	    and settlementPrice_today is not null
+	 	  GROUP BY DATE,  contact 
+		  ORDER BY DATE 
+	</select>
+	
+	<!-- 配置收益率  -->
+	<select id="calculateSettingYieldRatio" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT 
+		  p.date DATE,
+		  #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} productId,
+		  p.industry industry,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL untilNow,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  ROUND(
+		    (
+		      IFNULL(baseYieldTemp.today, 0) * IFNULL(weightTemp.today, 0) - IFNULL(baseWeightTemp.today, 0) * IFNULL(baseYieldTemp.today, 0)
+		    ),
+		    8
+		  ) today 
+		FROM
+		(select distinct date,industry from t_position_summary p
+			where concat(invester_id,broker_id) in (SELECT CONCAT(invester_id,broker_id)
+		    FROM
+		      t_product_invester_relationship
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND invester_type = '2')
+		  AND p.industry IS NOT NULL 
+		  AND p.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}
+		  ) p 
+		  LEFT JOIN (SELECT * FROM t_product_industry_period_statistics 
+			WHERE KPI = '030071'
+			AND product_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR} 
+			AND DATE = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}
+			 )baseYieldTemp 
+		    ON baseYieldTemp.industry = p.industry 
+		  LEFT JOIN (SELECT * FROM t_product_industry_period_statistics 
+			WHERE KPI = '030072'
+			AND product_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR} 
+			AND DATE = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}
+			 ) baseWeightTemp 
+		    ON baseWeightTemp.industry = p.industry 
+		  LEFT JOIN (SELECT * FROM t_product_industry_period_statistics 
+			WHERE KPI = '030063'
+			AND product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+			AND DATE = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}
+			 ) yieldTemp 
+		    ON yieldTemp.industry = p.industry 
+		  LEFT JOIN (SELECT * FROM t_product_industry_period_statistics 
+			WHERE KPI = '030064'
+			AND product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+			AND DATE = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR}
+			 ) weightTemp 
+		    ON weightTemp.industry = p.industry 
+	</select>
+	
+	<!-- 选股收益率  -->
+	<select id="calculateChoiceYieldRatio" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT 
+		  p.date DATE,
+		  #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} productId,
+		  p.industry industry,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  ROUND(
+		    IFNULL(baseWeightTemp.today, 0) * IFNULL(yieldTemp.today, 0)-IFNULL(baseWeightTemp.today, 0) * IFNULL(baseYieldTemp.today, 0),
+		    8
+		  ) today 
+		FROM
+		  (select distinct industry,date from t_position_summary p
+			where concat(invester_id,broker_id) in (SELECT CONCAT(invester_id,broker_id)
+		    FROM
+		      t_product_invester_relationship
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND invester_type = '2')
+		  AND p.industry IS NOT NULL 
+		  AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}
+		  ) p 
+		  LEFT JOIN 
+		    (SELECT 
+		      DATE,
+		      today,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR}  
+		      AND kpi = '030072' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		 	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}) baseWeightTemp 
+		    ON baseWeightTemp.date = p.date 
+		    AND baseWeightTemp.industry = p.industry 
+		  LEFT JOIN 
+		    (SELECT 
+		      DATE,
+		      today,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND kpi = '030063'
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		 	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR} ) yieldTemp 
+		    ON yieldTemp.date = p.date 
+		    AND yieldTemp.industry = p.industry
+		  LEFT JOIN 
+		    (SELECT 
+		      today,
+		      DATE,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR}  
+		      AND kpi = '030071' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		 	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}) baseYieldTemp 
+		    ON baseYieldTemp.date = p.date 
+		    AND baseYieldTemp.industry = p.industry 
+	</select>
+	
+	<!-- 交叉收益率 -->
+	<select id="calculateCrossYieldRatio" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT 
+		  p.date DATE,
+		  #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} productId,
+		  p.industry industry,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  ROUND(
+		    (
+		      IFNULL(baseWeightTemp.today, 0) * IFNULL(baseYieldTemp.today, 0) + IFNULL(weightTemp.today, 0) * IFNULL(yieldTemp.today, 0) - IFNULL(baseYieldTemp.today, 0) * IFNULL(weightTemp.today, 0) - IFNULL(baseWeightTemp.today, 0) * IFNULL(yieldTemp.today, 0)
+		    ),
+		    8
+		  ) today 
+		FROM
+		  (select distinct industry,date from t_position_summary p
+			where concat(invester_id,broker_id) in (SELECT CONCAT(invester_id,broker_id)
+		    FROM
+		      t_product_invester_relationship
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND invester_type = '2')
+		  AND p.industry IS NOT NULL 
+		  AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}
+		  ) p
+		  LEFT JOIN 
+		    (SELECT 
+		      today,
+		      DATE,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR} 
+		      AND kpi = '030071' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		 	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}) baseYieldTemp 
+		    ON baseYieldTemp.date = p.date 
+		    AND baseYieldTemp.industry = p.industry 
+		  LEFT JOIN 
+		    (SELECT 
+		      today,
+		      DATE,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR} 
+		      AND kpi = '030072' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		 	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}) baseWeightTemp 
+		    ON baseWeightTemp.date = p.date 
+		    AND baseWeightTemp.industry = p.industry 
+		  LEFT JOIN 
+		    (SELECT 
+		      today,
+		      DATE,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND kpi = '030063' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		 	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}) yieldTemp 
+		    ON yieldTemp.date = p.date 
+		    AND yieldTemp.industry = p.industry 
+		  LEFT JOIN 
+		    (SELECT 
+		      today,
+		      DATE,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND kpi = '030064' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		 	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}) weightTemp 
+		    ON weightTemp.date = p.date 
+		    AND weightTemp.industry = p.industry 
+	</select>
+	
+	<!-- 超额收益率 -->
+	<select id="calculateExcessearningsYieldRatio" parameterType="map" resultType="com.quantdo.iwin.entity.ProductIndustryPeriodStatistics">
+		SELECT 
+		  p.date DATE,
+		  #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} productId,
+		  p.industry industry,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  ROUND(
+		    IFNULL(weightTemp.today, 0) * IFNULL(yieldTemp.today, 0)-IFNULL(baseWeightTemp.today, 0) * IFNULL(baseYieldTemp.today, 0),
+		    8
+		  ) today 
+		FROM
+		  (select distinct industry,date from t_position_summary p
+			where concat(invester_id,broker_id) in (SELECT CONCAT(invester_id,broker_id)
+		    FROM
+		      t_product_invester_relationship
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND invester_type = '2')
+		  AND p.industry IS NOT NULL 
+		  AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}
+		  ) p
+		  LEFT JOIN 
+		    (SELECT 
+		      today,
+		      product_id,
+		      DATE,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND kpi = '030063' 
+		      AND DATE &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR} 
+		      AND DATE &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}) yieldTemp 
+		    ON yieldTemp.date = p.date 
+		    AND yieldTemp.industry = p.industry 
+		  LEFT JOIN 
+		    (SELECT 
+		      today,
+		      product_id,
+		      DATE,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND kpi = '030064' 
+		      AND DATE &gt;= #{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR} 
+		      AND DATE &lt;= #{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}) weightTemp 
+		    ON weightTemp.date = p.date 
+		    AND weightTemp.industry = p.industry 
+		  LEFT JOIN 
+		    (SELECT 
+		      DATE,
+		      today,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id =  #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR}  
+		      AND kpi = '030071' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		  	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR} ) baseYieldTemp 
+		    ON baseYieldTemp.date = p.date 
+		    AND baseYieldTemp.industry = p.industry 
+		  LEFT JOIN 
+		    (SELECT 
+		      DATE,
+		      today,
+		      industry 
+		    FROM
+		      t_product_industry_period_statistics 
+		    WHERE product_id =  #{kpiCalculationRequest.indexId ,jdbcType=VARCHAR}  
+		      AND kpi = '030072' 
+		      AND date &gt;= #{kpiCalculationRequest.beginDate,jdbcType=VARCHAR} 
+		  	  AND date &lt;= #{kpiCalculationRequest.endDate,jdbcType=VARCHAR}) baseWeightTemp 
+		    ON baseWeightTemp.date = p.date 
+		    AND baseWeightTemp.industry = p.industry 
+	</select>
+	
+	<!-- brinson配置 -->
+	<select id="calculateBrinsonKpi" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date DATE,
+		  t.product_id productID,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL untilNow,
+		  NULL oneMonth,
+		  NULL threeMonth, NULL sixMonth,
+		  NULL thisYear,
+		  NULL oneYear,
+		  SUM(IFNULL(t.today,0)) today 
+		FROM
+		  t_product_industry_period_statistics t 
+		WHERE  t.KPI = #{kpiCalculationRequest.baseKPI ,jdbcType=VARCHAR}
+		 AND t.product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+		 and t.date &gt;=#{kpiCalculationRequest.beginDate ,jdbcType=VARCHAR}
+		 and t.date &lt;=#{kpiCalculationRequest.endDate ,jdbcType=VARCHAR}
+		GROUP BY t.date 
+	</select>
+	
+	<!-- 各盘行价值成长指标计算 -->
+	<select id="calculateValueGrowth"  parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  p.date DATE,
+		  tp.product_id productID,
+		  #{kpiCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  COUNT(p.contact) today,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL thisYear,
+		  NULL oneYear,
+		  NULL utilNow 
+		FROM
+		  t_position_summary p 
+		  LEFT JOIN t_product_invester_relationship tp 
+		    ON p.invester_id = tp.invester_id 
+		    AND p.broker_id = tp.broker_id 
+		  LEFT JOIN t_contract c 
+		    ON p.date = c.date 
+		    AND c.contract = p.contact 
+		WHERE p.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  AND p.market_type = '2' 
+		  AND p.industry IS NOT NULL 
+		  <if test="kpiCalculationRequest != null">
+			<if test="kpiCalculationRequest.productId  != null and kpiCalculationRequest.productId != ''">
+				and tp.product_id = #{kpiCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.stockType  != null and kpiCalculationRequest.stockType != ''">
+				and c.stock_type = #{kpiCalculationRequest.stockType ,jdbcType=VARCHAR}
+			</if>
+			<if test="kpiCalculationRequest.valueGrowth  != null and kpiCalculationRequest.valueGrowth != ''">
+				and c.stock_growth_value = #{kpiCalculationRequest.valueGrowth ,jdbcType=VARCHAR}
+			</if>
+		  </if>
+		  GROUP BY tp.product_id;
+	</select>
+</mapper>

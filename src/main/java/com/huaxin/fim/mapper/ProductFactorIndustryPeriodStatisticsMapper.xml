@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductFactorIndustryPeriodStatisticsMapper">
+
+	<delete id="deleteProrductFactorIndustryPeriod" parameterType="map">
+		delete from t_product_factor_industry_period_statistics  
+		where date between #{analysisProductPeriod.startDate ,jdbcType=VARCHAR} and #{analysisProductPeriod.endDate ,jdbcType=VARCHAR}
+	<if test="analysisProductPeriod != null">
+		<if test="analysisProductPeriod.productID  != null and analysisProductPeriod.productID != ''">
+			and product_id = #{analysisProductPeriod.productID ,jdbcType=VARCHAR}
+		</if>
+		<if test="analysisProductPeriod.kpiType != 0">
+			AND KPI IN 
+				  (SELECT 
+				    a.KPI 
+				  FROM
+				    t_kpi_dictionary a 
+				  WHERE a.type = #{analysisProductPeriod.kpiType,jdbcType=VARCHAR})
+		</if>
+		<if test="analysisProductPeriod.kpiCodes != null ">
+			and kpi in
+			<foreach item="kpiCode" index="index" collection="analysisProductPeriod.kpiCodes" open="(" separator="," close=")">  
+	            #{kpiCode}  
+	  		</foreach>
+		</if>
+	</if>
+	</delete>
+	
+	<!-- 获取风格敏感度 -->
+	<select id="getIndustrySensitivity" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		SELECT * FROM (
+			SELECT type,value FROM (
+				SELECT p.industry TYPE,
+				<if test="attributionAnalysisRequest.periodType == 1 ">
+					p.one_month*100.0 VALUE 
+				</if>
+				<if test="attributionAnalysisRequest.periodType == 2 ">
+					p.three_month*100.0 VALUE 
+				</if>
+				<if test="attributionAnalysisRequest.periodType == 3 ">
+					p.six_month*100.0 VALUE 
+				</if>
+				<if test="attributionAnalysisRequest.periodType == 4 ">
+					p.one_year*100.0 VALUE 
+				</if>
+				<if test="attributionAnalysisRequest.periodType == 0 ">
+					p.until_now*100.0 VALUE 
+				</if>
+				<if test="attributionAnalysisRequest.periodType == 5 ">
+					p.this_year*100.0 VALUE 
+				</if>
+				FROM t_product_factor_industry_period_statistics p
+				WHERE p.product_id = #{attributionAnalysisRequest.productId,jdbcType=VARCHAR}  
+				AND p.kpi = 040047 
+				AND p.factor_id = 010007
+				AND p.date = (select max(date) 
+					from t_product_factor_industry_period_statistics p 
+					where p.product_id = #{attributionAnalysisRequest.productId,jdbcType=VARCHAR}  
+					AND p.kpi = 040047 
+					AND p.factor_id = 010007)
+				GROUP BY p.industry,date DESC)X
+			GROUP BY type) baseList
+		ORDER BY VALUE DESC
+	</select>
+	
+	<!-- 获取风格敏感度 -->
+	<select id="getIndustrySensitivityTrend" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		SELECT * FROM (
+			SELECT industry TYPE,
+			SUBSTR(DATE,1,6) DATE, 
+			<if test="attributionAnalysisRequest.periodType == 1 ">
+				p.one_month*100.0 VALUE 
+			</if>
+			<if test="attributionAnalysisRequest.periodType == 2 ">
+				p.three_month*100.0 VALUE 
+			</if>
+			<if test="attributionAnalysisRequest.periodType == 3 ">
+				p.six_month*100.0 VALUE 
+			</if>
+			<if test="attributionAnalysisRequest.periodType == 4 ">
+				p.one_year*100.0 VALUE 
+			</if>
+			<if test="attributionAnalysisRequest.periodType == 0 ">
+				p.until_now*100.0 VALUE 
+			</if>
+			<if test="attributionAnalysisRequest.periodType == 5 ">
+				p.this_year*100.0 VALUE 
+			</if>
+			FROM t_product_factor_industry_period_statistics p
+			WHERE p.product_id = #{attributionAnalysisRequest.productId,jdbcType=VARCHAR}  
+			AND KPI = 040047
+			GROUP BY p.industry, p.DATE DESC)X
+		GROUP BY TYPE,DATE
+	</select>
+	
+</mapper>

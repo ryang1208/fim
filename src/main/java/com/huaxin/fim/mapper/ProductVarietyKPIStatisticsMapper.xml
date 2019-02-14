@@ -1,0 +1,1011 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ProductVarietyKPIStatisticsMapper">
+	
+	<!-- 计算累计盈利指标（产品） -->
+	<select id="calculateVarietyProfitOrLoss" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  t.date,
+		  T.variety_id variety,
+		  case when #{profitAndLossCalculationRequest.isProfit ,jdbcType=VARCHAR}='1' then
+			  SUM( CASE WHEN t.close_profit_hedge IS NOT NULL THEN (CASE  WHEN t.close_profit_hedge > 0 THEN ABS(t.close_profit_hedge) ELSE 0 END )
+				ELSE (CASE WHEN t.close_profit > 0 THEN ABS(t.close_profit) ELSE 0 END )
+			    END
+			  )
+		  else 
+			  SUM( CASE WHEN t.close_profit_hedge IS NOT NULL THEN (CASE  WHEN t.close_profit_hedge &lt;= 0 THEN ABS(t.close_profit_hedge) ELSE 0 END )
+				ELSE (CASE WHEN t.close_profit &lt;= 0 THEN ABS(t.close_profit) ELSE 0 END )
+			    END
+			  ) 
+		end today
+		FROM
+		  t_variety_summary t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id,
+		      product_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR} 
+		      AND invester_type = 1) temp 
+		    ON 1 = 1 
+		WHERE t.invester_id IN (temp.invester_id) 
+		  AND t.broker_id IN (temp.broker_id) 
+		GROUP BY t.date,
+		  t.variety_id 
+	</select>
+
+    <delete id="deleteVarityKpi" parameterType="map">
+		delete from t_product_period_variety_kpi_statistics 
+		where date between #{profitAndLossCalculationRequest.beginDate ,jdbcType=VARCHAR} and #{profitAndLossCalculationRequest.endDate ,jdbcType=VARCHAR}
+		<if test="profitAndLossCalculationRequest != null">
+			<if test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+				and product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR}
+			</if>
+			<if test="profitAndLossCalculationRequest.kpiType != 0">
+				AND KPI IN 
+					  (SELECT 
+					    a.KPI 
+					  FROM
+					    t_kpi_dictionary a 
+					  WHERE a.type = #{profitAndLossCalculationRequest.kpiType,jdbcType=VARCHAR})
+			</if>
+			<if test="profitAndLossCalculationRequest.kpiCodes != null ">
+				and kpi in
+			<foreach item="kpiCode" index="index" collection="profitAndLossCalculationRequest.kpiCodes" open="(" separator="," close=")">  
+	            #{kpiCode}  
+	  		</foreach>
+		</if>
+		</if>
+	</delete>
+	
+	<select id="calculateTotalOffsetLots"  parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  t.date,
+		  SUM(CASE WHEN t.lots IS NULL THEN 0 ELSE t.lots END )today,
+		  t.variety_id variety 
+		FROM
+		  t_transaction_summary t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR}
+		      AND invester_type = 1) temp 
+		    ON 1 = 1 
+		WHERE t.invester_id IN (temp.invester_id) 
+		  AND t.broker_id IN (temp.broker_id) 
+		  AND t.variety_id IS NOT NULL
+		  AND t.oc=1
+		GROUP BY t.date ,t.variety_id
+		ORDER BY t.date ASC,t.variety_id 
+	</select>
+	
+	<select id="calculateTotalProfitOffsetLots"  parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  t.date,
+		  SUM(CASE WHEN t.lots IS NULL THEN 0 ELSE t.lots END )today,
+		  t.variety_id variety 
+		FROM
+		  t_transaction_summary t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR}
+		      AND invester_type = 1) temp 
+		    ON 1 = 1 
+		WHERE t.invester_id IN (temp.invester_id) 
+		  AND t.broker_id IN (temp.broker_id) 
+		  AND t.variety_id IS NOT NULL
+		  AND t.oc=1
+		  AND ((t.close_profit_hedge IS NOT NULL AND t.close_profit_hedge > 0 )OR (t.close_profit_hedge IS NULL AND t.close_profit >0))
+		GROUP BY t.date ,t.variety_id
+		ORDER BY t.date ASC,t.variety_id 
+	</select>
+	<select id="calculateWinRatio"  parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  tp.date DATE,
+		  tp.product_id productID,
+		  #{profitAndLossCalculationRequest.kpi,jdbcType=VARCHAR} kpi,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  #{profitAndLossCalculationRequest.dataSource,jdbcType=VARCHAR} dataSource,
+		  tp.variety variety,
+		  (CASE WHEN tp1.today IS NOT NULL AND tp1.today != 0 THEN ROUND(tp.today/tp1.today,6) ELSE 0 END ) today,
+		  (CASE WHEN tp1.one_month IS NOT NULL AND tp1.one_month!=0 THEN ROUND(tp.one_month/tp1.one_month,6) ELSE 0 END ) oneMonth,
+		  (CASE WHEN tp1.three_month IS NOT NULL AND tp1.three_month!=0 THEN ROUND(tp.three_month/tp1.three_month,6) ELSE 0 END ) threeMonth,
+		  (CASE WHEN tp1.six_month IS NOT NULL AND tp1.six_month!=0 THEN ROUND(tp.six_month/tp1.six_month,6) ELSE 0 END ) sixMonth,
+		  (CASE WHEN tp1.one_year IS NOT NULL AND tp1.one_year!=0 THEN ROUND(tp.one_year/tp1.one_year,6) ELSE 0 END ) oneYear,
+		  (CASE WHEN tp1.this_year IS NOT NULL AND tp1.this_year!=0 THEN ROUND(tp.this_year/tp1.this_year,6) ELSE 0 END ) thisYear,
+		  (CASE WHEN tp1.until_now IS NOT NULL AND tp1.until_now!=0 THEN ROUND(tp.until_now/tp1.until_now,6) ELSE 0 END ) untilNow
+		FROM
+		  t_product_period_variety_kpi_statistics tp,
+		  t_product_period_variety_kpi_statistics tp1 
+		WHERE tp.product_id = tp1.product_id 
+		  AND tp.date = tp1.date 
+		  AND tp.variety = tp1.variety 
+		  AND tp.date = #{profitAndLossCalculationRequest.statDate,jdbcType=VARCHAR} 
+		  AND tp.KPI = '020040' 
+		  AND tp1.KPI='020039'
+		  <if test="profitAndLossCalculationRequest.productId  != null and profitAndLossCalculationRequest.productId != ''">
+				and tp.product_id = #{profitAndLossCalculationRequest.productId ,jdbcType=VARCHAR}
+		  </if>
+	</select>
+	
+	<!-- 品种胜率 -->
+	<select id="getVarietyWinRatioList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  tv.variety_name variety,
+		  <if test="analysisSearchRequest.periodType == 1 ">
+		    temp.oneMonth 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 2 ">
+		    temp.threeMonth 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 3 ">
+		    temp.sixMonth 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 4 ">
+		    temp.oneYear 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 0 ">
+		    temp.untilNow
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 5 ">
+		    temp.thisYear 
+		    </if>
+		FROM
+		 (SELECT variety,
+		 	<if test="analysisSearchRequest.periodType == 1 ">
+			    oneMonth
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 2 ">
+			    threeMonth
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 3 ">
+			    sixMonth
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 4 ">
+			    oneYear
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 0 ">
+			    untilNow
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 5 ">
+			    thisYear 
+			    </if>
+		 	FROM (SELECT 
+			    t.variety variety,
+			    <if test="analysisSearchRequest.periodType == 1 ">
+			    ROUND(t.one_month,4)*100 oneMonth
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 2 ">
+			    ROUND(t.three_month,4)*100 threeMonth
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 3 ">
+			    ROUND(t.six_month,4)*100 sixMonth
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 4 ">
+			    ROUND(t.one_year,4)*100 oneYear
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 0 ">
+			    ROUND(t.until_now,4)*100 untilNow
+			    </if>
+			    <if test="analysisSearchRequest.periodType == 5 ">
+			    ROUND(t.this_year,4)*100 thisYear 
+			    </if>
+			  FROM
+			    t_product_period_variety_kpi_statistics t 
+			  WHERE t.KPI = '030012' 
+			  and t.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+			  GROUP BY t.date DESC,variety) X
+		  	GROUP BY variety
+	      ) temp 
+	      LEFT JOIN (SELECT * FROM t_variety WHERE is_priority = '1') tv ON temp.variety = tv.variety_id
+	  ORDER BY 
+	  	<if test="analysisSearchRequest.periodType == 1 ">
+		    temp.oneMonth 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 2 ">
+		    temp.threeMonth 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 3 ">
+		    temp.sixMonth 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 4 ">
+		    temp.oneYear 
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 0 ">
+		    temp.untilNow
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 5 ">
+		    temp.thisYear 
+		    </if>
+	     DESC
+		LIMIT 20 
+	</select>
+	
+	<!-- 获取品种累计收益额列表（盈利前十）  -->
+	<select id="getVarietyTotalYieldProfitList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  temp.variety variety,
+		  temp.yData  yData
+		FROM
+		  (SELECT 
+		    tp.date,
+		    tv.variety_name variety,
+		     yData 
+		  FROM
+		    (SELECT 
+		    DATE,
+		    variety,
+		    <if test="analysisSearchRequest.periodType == 1 ">
+		    tp.one_month
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 2 ">
+		    tp.three_month
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 3 ">
+		    tp.six_month
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 4 ">
+		    tp.one_year
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 0 ">
+		    tp.until_now
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 5 ">
+		    tp.this_year 
+		    </if>
+		     yData   
+		  FROM
+		    t_product_period_variety_kpi_statistics tp 
+		    WHERE tp.KPI = '020053' 
+		    AND tp.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}) tp 
+		    LEFT JOIN (SELECT * FROM t_variety WHERE is_priority = '1') tv 
+		      ON tp.variety = tv.variety_id 
+		  GROUP BY tv.variety_name,tp.date DESC) temp 
+		GROUP BY temp.variety HAVING temp.yData &gt; 0
+		ORDER BY temp.yData DESC
+		LIMIT 10 
+	</select>
+	
+	<!-- 获取品种累计收益额列表（亏损前五）  -->
+	<select id="getVarietyTotalYieldLossList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  temp.variety variety,
+		  temp.yData  yData
+		FROM
+		  (SELECT 
+		    tp.date,
+		    tv.variety_name variety,
+		    yData
+		  FROM
+		    (SELECT 
+		    DATE,
+		    variety,
+		    <if test="analysisSearchRequest.periodType == 1 ">
+		    tp.one_month
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 2 ">
+		    tp.three_month
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 3 ">
+		    tp.six_month
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 4 ">
+		    tp.one_year
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 0 ">
+		    tp.until_now
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 5 ">
+		    tp.this_year 
+		    </if>
+		     yData   
+		  FROM
+		    t_product_period_variety_kpi_statistics tp 
+		    WHERE tp.KPI = '020053' 
+		    AND tp.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}) tp 
+		    LEFT JOIN (SELECT * FROM t_variety WHERE is_priority = '1') tv 
+		      ON tp.variety = tv.variety_id 
+		  GROUP BY tv.variety_name,tp.date DESC) temp 
+		GROUP BY temp.variety HAVING temp.yData &lt; 0
+		ORDER BY temp.yData desc
+		LIMIT 10
+	</select>
+	
+	<!-- 计算品种成交额指标  -->
+	<select id="calculateVarietyTurnOver" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		SELECT 
+		  t.date,
+		  SUM(IFNULL(t.turnover, 0)) today,
+		  t.variety_id variety
+		FROM
+		  t_variety_summary t 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship 
+		    WHERE product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR} 
+		      AND invester_type = 1) temp 
+		    ON 1 = 1 
+		WHERE t.invester_id IN (temp.invester_id) 
+		  AND t.broker_id IN (temp.broker_id) 
+		GROUP BY t.variety_id,
+		  t.date 
+		ORDER BY t.date ASC,
+		  t.variety_id 
+	</select>
+	
+	<!-- 品种成交结构 -->
+	<select id="getVarietyTurnoverList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodVarietyKPIStatistics">
+		select * from (
+			select base.date,
+			varietyList.variety_name variety,
+			<if test="analysisSearchRequest.periodType == 1 ">
+		    base.one_month oneMonth
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 2 ">
+		    base.three_month threeMonth
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 3 ">
+		    base.six_month sixMonth
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 4 ">
+		    base.one_year oneYear
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 0 ">
+		    base.until_now untilNow
+		    </if>
+		    <if test="analysisSearchRequest.periodType == 5 ">
+		    base.this_year thisYear
+		    </if>
+			from t_product_period_variety_kpi_statistics base
+			left join (SELECT * FROM t_variety WHERE is_priority = '1') varietyList on base.variety = varietyList.variety_id
+			where base.KPI = #{analysisSearchRequest.kpiCode,jdbcType=VARCHAR} 
+			<if test="analysisSearchRequest.productId != null and analysisSearchRequest.productId != ''">
+				and base.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+			</if>
+			group by base.date desc,base.variety )X 
+			where 1=1
+			group by variety
+	</select>
+	<!-- 多空盈利 -->
+	<select id="getVarietyProfitList" parameterType="map" resultType="com.quantdo.iwin.response.VarietyBuySellProfitResponse">
+		SELECT variList.variety_name variety, 
+			<if test="analysisSearchRequest.periodType == 0">
+				profitList.untilNow profitUntilNow,
+				lossList.untilNow lossUntilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				profitList.oneMonth profitOneMonth,
+				lossList.oneMonth lossOneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				profitList.threeMonth profitThreeMonth,
+				lossList.threeMonth lossThreeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				profitList.sixMonth profitSixMonth,
+				lossList.sixMonth lossSixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				profitList.oneYear profitOneYear,
+				lossList.oneYear lossOneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				profitList.thisYear profitThisYear,
+				lossList.thisYear lossThisYear
+			</if>
+		FROM (
+		SELECT baseSum.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				baseSum.until_now untilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				baseSum.one_month oneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				baseSum.three_month threeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				baseSum.six_month sixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				baseSum.one_year oneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				baseSum.this_year thisYear
+			</if>
+		FROM (SELECT base.variety ,
+			<if test="analysisSearchRequest.periodType == 0">
+				base.until_now
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				base.one_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				base.three_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				base.six_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				base.one_year 
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				base.this_year 
+			</if>
+			FROM t_product_period_variety_kpi_statistics base 
+			WHERE KPI = '020053'
+				AND base.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+			GROUP BY base.date DESC ,
+				base.variety,
+				<if test="analysisSearchRequest.periodType == 0">
+					base.until_now
+				</if>
+				<if test="analysisSearchRequest.periodType == 1">
+					base.one_month 
+				</if>
+				<if test="analysisSearchRequest.periodType == 2">
+					base.three_month 
+				</if>
+				<if test="analysisSearchRequest.periodType == 3">
+					base.six_month 
+				</if>
+				<if test="analysisSearchRequest.periodType == 4">
+					base.one_year 
+				</if>
+				<if test="analysisSearchRequest.periodType == 5">
+					base.this_year 
+				</if> 
+			)baseSum
+			GROUP BY variety 
+				<if test="analysisSearchRequest.periodType == 0">
+						HAVING baseSum.until_now > 0
+					ORDER BY baseSum.until_now DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 1">
+						HAVING baseSum.one_month > 0
+					ORDER BY baseSum.one_month DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 2">
+						HAVING baseSum.three_month > 0
+					ORDER BY baseSum.three_month DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 3">
+						HAVING baseSum.six_month > 0
+					ORDER BY baseSum.six_month DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 4">
+						HAVING baseSum.one_year > 0
+					ORDER BY baseSum.one_year DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 5">
+						HAVING baseSum.this_year > 0
+					ORDER BY baseSum.this_year DESC LIMIT 5
+				</if>
+			
+		) base
+		LEFT JOIN 
+		(SELECT profitSum.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				profitSum.until_now untilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				profitSum.one_month oneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				profitSum.three_month threeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				profitSum.six_month sixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				profitSum.one_year oneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				profitSum.this_year thisYear
+			</if> 
+		FROM (SELECT base.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				base.until_now
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				base.one_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				base.three_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				base.six_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				base.one_year 
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				base.this_year 
+			</if> 
+					FROM t_product_period_variety_kpi_statistics base 
+					WHERE KPI = '020054'
+						AND base.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+					GROUP BY base.date DESC ,
+						base.variety,
+						<if test="analysisSearchRequest.periodType == 0">
+							base.until_now
+						</if>
+						<if test="analysisSearchRequest.periodType == 1">
+							base.one_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 2">
+							base.three_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 3">
+							base.six_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 4">
+							base.one_year 
+						</if>
+						<if test="analysisSearchRequest.periodType == 5">
+							base.this_year 
+						</if>
+				)profitSum
+				GROUP BY variety
+		)profitList ON profitList.variety = base.variety
+		LEFT JOIN 
+		(SELECT lossSum.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				lossSum.until_now untilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				lossSum.one_month oneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				lossSum.three_month threeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				lossSum.six_month sixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				lossSum.one_year oneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				lossSum.this_year thisYear
+			</if> 
+		FROM (SELECT base.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				base.until_now
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				base.one_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				base.three_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				base.six_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				base.one_year 
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				base.this_year 
+			</if>
+					FROM t_product_period_variety_kpi_statistics base 
+					WHERE KPI = '020055'
+						AND base.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+					GROUP BY base.date DESC ,
+						base.variety,
+						<if test="analysisSearchRequest.periodType == 0">
+							base.until_now
+						</if>
+						<if test="analysisSearchRequest.periodType == 1">
+							base.one_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 2">
+							base.three_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 3">
+							base.six_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 4">
+							base.one_year 
+						</if>
+						<if test="analysisSearchRequest.periodType == 5">
+							base.this_year 
+						</if>
+				)lossSum
+				GROUP BY variety
+		)lossList ON lossList.variety = base.variety
+		LEFT JOIN (SELECT * FROM t_variety WHERE is_priority = '1') variList ON variList.variety_id = base.variety
+	</select>
+	
+	<!-- 多空亏损 -->
+	<select id="getVarietyLossList" parameterType="map" resultType="com.quantdo.iwin.response.VarietyBuySellProfitResponse">
+		SELECT variList.variety_name variety, 
+			<if test="analysisSearchRequest.periodType == 0">
+				profitList.untilNow profitUntilNow,
+				lossList.untilNow lossUntilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				profitList.oneMonth profitOneMonth,
+				lossList.oneMonth lossOneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				profitList.threeMonth profitThreeMonth,
+				lossList.threeMonth lossThreeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				profitList.sixMonth profitSixMonth,
+				lossList.sixMonth lossSixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				profitList.oneYear profitOneYear,
+				lossList.oneYear lossOneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				profitList.thisYear profitThisYear,
+				lossList.thisYear lossThisYear
+			</if>
+		FROM (
+		SELECT baseSum.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				baseSum.until_now untilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				baseSum.one_month oneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				baseSum.three_month threeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				baseSum.six_month sixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				baseSum.one_year oneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				baseSum.this_year thisYear
+			</if>
+		FROM (SELECT base.variety ,
+			<if test="analysisSearchRequest.periodType == 0">
+				base.until_now
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				base.one_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				base.three_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				base.six_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				base.one_year 
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				base.this_year 
+			</if>
+			FROM t_product_period_variety_kpi_statistics base 
+			WHERE KPI = '020053'
+				AND base.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+			GROUP BY base.date DESC ,
+				base.variety,
+				<if test="analysisSearchRequest.periodType == 0">
+					base.until_now
+				</if>
+				<if test="analysisSearchRequest.periodType == 1">
+					base.one_month 
+				</if>
+				<if test="analysisSearchRequest.periodType == 2">
+					base.three_month 
+				</if>
+				<if test="analysisSearchRequest.periodType == 3">
+					base.six_month 
+				</if>
+				<if test="analysisSearchRequest.periodType == 4">
+					base.one_year 
+				</if>
+				<if test="analysisSearchRequest.periodType == 5">
+					base.this_year 
+				</if> 
+			)baseSum
+			GROUP BY variety 
+				<if test="analysisSearchRequest.periodType == 0">
+						HAVING baseSum.until_now &lt; 0
+					ORDER BY baseSum.until_now DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 1">
+						HAVING baseSum.one_month &lt; 0
+					ORDER BY baseSum.one_month DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 2">
+						HAVING baseSum.three_month &lt; 0
+					ORDER BY baseSum.three_month DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 3">
+						HAVING baseSum.six_month &lt; 0
+					ORDER BY baseSum.six_month DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 4">
+						HAVING baseSum.one_year &lt; 0
+					ORDER BY baseSum.one_year DESC LIMIT 5
+				</if>
+				<if test="analysisSearchRequest.periodType == 5">
+						HAVING baseSum.this_year &lt; 0
+					ORDER BY baseSum.this_year DESC LIMIT 5
+				</if>
+			
+		) base
+		LEFT JOIN 
+		(SELECT profitSum.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				profitSum.until_now untilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				profitSum.one_month oneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				profitSum.three_month threeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				profitSum.six_month sixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				profitSum.one_year oneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				profitSum.this_year thisYear
+			</if> 
+		FROM (SELECT base.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				base.until_now
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				base.one_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				base.three_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				base.six_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				base.one_year 
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				base.this_year 
+			</if> 
+					FROM t_product_period_variety_kpi_statistics base 
+					WHERE KPI = '020054'
+						AND base.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+					GROUP BY base.date DESC ,
+						base.variety,
+						<if test="analysisSearchRequest.periodType == 0">
+							base.until_now
+						</if>
+						<if test="analysisSearchRequest.periodType == 1">
+							base.one_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 2">
+							base.three_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 3">
+							base.six_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 4">
+							base.one_year 
+						</if>
+						<if test="analysisSearchRequest.periodType == 5">
+							base.this_year 
+						</if>
+				)profitSum
+				GROUP BY variety
+		)profitList ON profitList.variety = base.variety
+		LEFT JOIN 
+		(SELECT lossSum.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				lossSum.until_now untilNow
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				lossSum.one_month oneMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				lossSum.three_month threeMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				lossSum.six_month sixMonth
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				lossSum.one_year oneYear
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				lossSum.this_year thisYear
+			</if> 
+		FROM (SELECT base.variety,
+			<if test="analysisSearchRequest.periodType == 0">
+				base.until_now
+			</if>
+			<if test="analysisSearchRequest.periodType == 1">
+				base.one_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 2">
+				base.three_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 3">
+				base.six_month 
+			</if>
+			<if test="analysisSearchRequest.periodType == 4">
+				base.one_year 
+			</if>
+			<if test="analysisSearchRequest.periodType == 5">
+				base.this_year 
+			</if>
+					FROM t_product_period_variety_kpi_statistics base 
+					WHERE KPI = '020055'
+						AND base.product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}
+					GROUP BY base.date DESC ,
+						base.variety,
+						<if test="analysisSearchRequest.periodType == 0">
+							base.until_now
+						</if>
+						<if test="analysisSearchRequest.periodType == 1">
+							base.one_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 2">
+							base.three_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 3">
+							base.six_month 
+						</if>
+						<if test="analysisSearchRequest.periodType == 4">
+							base.one_year 
+						</if>
+						<if test="analysisSearchRequest.periodType == 5">
+							base.this_year 
+						</if>
+				)lossSum
+				GROUP BY variety
+		)lossList ON lossList.variety = base.variety
+		LEFT JOIN (SELECT * FROM t_variety WHERE is_priority = '1') variList ON variList.variety_id = base.variety
+	</select>
+	
+	<!-- 获取持仓前十大个股  -->
+	<select id="getSecurityVarietyTenAheadMarketValue" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		SELECT t.date,contract.contract_name TYPE,t.today VALUE,ROUND(v.today*100.00,2) ratio
+		FROM(
+		SELECT DATE, product_id,variety,today
+		FROM t_product_period_variety_kpi_statistics
+		WHERE KPI = '020059' AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+			AND DATE = (SELECT DATE FROM t_product_period_variety_kpi_statistics
+				WHERE KPI = '020059' 
+					AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+					<if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+						AND date = #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+				GROUP BY DATE DESC LIMIT 1))t
+		LEFT JOIN (
+		SELECT DATE, product_id,variety,today
+		FROM t_product_period_variety_kpi_statistics 
+		WHERE KPI = '030141' AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+			AND DATE = (SELECT DATE FROM t_product_period_variety_kpi_statistics
+				WHERE KPI = '030141' 
+					AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+					<if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+						AND date = #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+				GROUP BY DATE DESC LIMIT 1))v ON t.variety = v.variety
+		LEFT JOIN (SELECT c.date,c.contract,c.contract_name FROM t_contract c
+		WHERE DATE = (SELECT DATE FROM t_product_period_variety_kpi_statistics 
+				WHERE KPI = '020059' 
+					AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR}  
+					<if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+						AND date = #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+				GROUP BY DATE DESC LIMIT 1)
+			) contract ON t.variety = contract.contract 
+		ORDER BY v.today DESC 
+		LIMIT 10
+	</select>
+	
+	<!-- 获取持仓前十大行业  -->
+	<select id="getSecurityVarietyFirstTenthRatio" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		SELECT t.date,t.industry type,t.today value,ROUND(v.today*100.00,2) ratio
+		FROM(
+		SELECT DATE, product_id,industry,today
+		FROM t_product_industry_period_statistics 
+		WHERE KPI = '020062' AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+			AND DATE = (SELECT DATE FROM t_product_industry_period_statistics
+				WHERE KPI = '020062' 
+					AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+					<if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+						AND date = #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+				GROUP BY DATE DESC LIMIT 1))t
+		LEFT JOIN (
+		SELECT DATE, product_id,industry,today
+		FROM t_product_industry_period_statistics 
+		WHERE KPI = '030136' AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+			AND DATE = (SELECT DATE FROM t_product_industry_period_statistics
+				WHERE KPI = '030136' 
+					AND product_id = #{analysisSearchRequest.productId,jdbcType=VARCHAR} 
+					<if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+						AND date = #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+					</if>
+				GROUP BY DATE DESC LIMIT 1))v ON t.industry = v.industry
+		ORDER BY v.today DESC 
+		LIMIT 10
+	</select>
+	
+	<!-- 期末持股集中度  -->
+	<select id="getConcentrationOnStocks" parameterType="map" resultType="com.quantdo.iwin.response.ConcentrationOnStocksResponse">
+				 		SELECT m.bigAwkwardness  bigAwkwardness,
+						m.date DATE FROM(
+						SELECT t.date,t.today,
+						CONVERT(ta.today/t.today,DECIMAL(15,5))  bigAwkwardness
+						FROM t_product_period_kpi_statistics t
+						 LEFT JOIN(
+						 SELECT product_id,DATE,today FROM t_product_period_variety_kpi_statistics 
+						 WHERE kpi=#{analysisSearchRequest.kpi,jdbcType=VARCHAR} 
+						 AND product_id=#{analysisSearchRequest.productId,jdbcType=VARCHAR}
+						 )ta
+					 ON ta.product_id=t.product_id AND ta.date=t.date
+					 WHERE t.kpi='020087' AND t.product_id=#{analysisSearchRequest.productId,jdbcType=VARCHAR}
+			 <if test="analysisSearchRequest.beginDate != null and analysisSearchRequest.beginDate !=''">
+	          AND t.date &gt;= #{analysisSearchRequest.beginDate,jdbcType=VARCHAR}
+          	 </if>
+		 	 <if test="analysisSearchRequest.endDate != null and analysisSearchRequest.endDate !=''">
+	          AND t.date &lt;=#{analysisSearchRequest.endDate,jdbcType=VARCHAR}
+          	 </if>
+					  )m WHERE bigAwkwardness IS NOT NULL	
+	</select>
+	<!-- 取得股票持仓市值占比列表(多账户合并) -->
+	<select id="findStockWeightRatioList" parameterType="map" resultType="com.quantdo.iwin.response.TypeSourceListResponse">
+		SELECT 
+			base.product_id productID,
+			base.date,
+			base.variety type,
+			base.numerator,
+			IFNULL(totalList.denominator,0) denominator
+		FROM(
+			SELECT t.product_id,t.date,t.variety,SUM(today) numerator
+			FROM t_product_period_variety_kpi_statistics t
+			WHERE t.KPI = '020059'
+				<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+					AND t.product_ID = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+				</if>
+				<if test="analysisProductPeriod.endDate != null and analysisProductPeriod.endDate != ''">
+					AND t.date &lt;= #{analysisProductPeriod.endDate,jdbcType=VARCHAR} 
+				</if>
+				<if test="analysisProductPeriod.startDate != null and analysisProductPeriod.startDate != ''">
+					AND t.date >= #{analysisProductPeriod.startDate,jdbcType=VARCHAR}
+				</if>
+			GROUP BY t.product_id,t.date,t.variety)base
+		LEFT JOIN (
+			SELECT t.date,SUM(today) denominator
+			FROM t_product_period_kpi_statistics t
+			WHERE t.KPI = '020099'
+				<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+					AND t.product_ID = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+				</if>
+				<if test="analysisProductPeriod.endDate != null and analysisProductPeriod.endDate != ''">
+					AND t.date &lt;= #{analysisProductPeriod.endDate,jdbcType=VARCHAR} 
+				</if>
+				<if test="analysisProductPeriod.startDate != null and analysisProductPeriod.startDate != ''">
+					AND t.date >= #{analysisProductPeriod.startDate,jdbcType=VARCHAR}
+				</if>
+			GROUP BY t.date
+		)totalList ON totalList.date = base.date
+ 	</select>
+</mapper>

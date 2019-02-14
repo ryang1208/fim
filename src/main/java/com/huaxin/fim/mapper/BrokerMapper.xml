@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.BrokerMapper">
+
+	<select id="getBrokerByBrokerType" parameterType="map"
+		resultType="com.quantdo.iwin.entity.Broker">
+		SELECT t.id  id FROM t_broker t 
+		where t.broker_name = ''
+		<if test="brokerType != null and brokerType !=''">
+			 and t.broker_type = #{brokerType,jdbcType=VARCHAR}  
+		</if>
+	</select>
+	
+</mapper>

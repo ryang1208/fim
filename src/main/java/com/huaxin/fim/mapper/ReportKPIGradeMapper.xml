@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ReportKPIGradeMapper">
+	
+	<!-- 取得评测规则设置列表-->
+	<select id="getReportKPIGradeList" parameterType="String" resultType="com.quantdo.iwin.entity.ReportKPIGrade">
+		SELECT 
+		  r.report_id   reportId,
+		  r.KPI   kpi,
+		  r.grade_ceiling   gradeCeiling,
+		  r.grade_floor   gradeFloor,
+		  r.grade_score   gradeScore ,
+		  r.period_type  periodType
+		FROM
+		  t_report_kpi_grade r 
+		where 1=1 
+		<if test="kpi != null and kpi !=''">
+			and r.KPI=#{kpi,jdbcType=VARCHAR}
+		</if>
+		<if test="reportId != null and reportId !=''">
+			and r.report_id=#{reportId,jdbcType=VARCHAR}
+		</if>
+		<if test="periodType != null and periodType !=''">
+			and r.period_type=#{periodType,jdbcType=VARCHAR}
+		</if>
+    </select>
+    
+    <!-- 获取指标权重配置 -->
+	<select id="getKpiWeight" parameterType="String" resultType="com.quantdo.iwin.entity.Datadictionary">
+		SELECT 
+		  t.data_code dataCode,
+		  t.data_describe dataDescribe,
+		  t.data_type dataType,
+		  t.data_type_describe dataTypeDescribe,
+		  t.data_value dataValue 
+		FROM
+		  t_iwin_data_dictionary t 
+		WHERE t.data_type = 'KPIWeight' 
+		  <if test="dataCode != null and dataCode !=''">
+			and t.data_code=#{dataCode,jdbcType=VARCHAR}
+		</if>
+  </select>
+  
+  	<delete id="deleteKpiGradeByReportId">
+		delete from t_report_kpi_grade where report_id = #{reportId,jdbcType=VARCHAR}
+	</delete>
+  
+</mapper>

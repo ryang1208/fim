@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.AnalysisProductDrawDownMapper">
+	<select id="findDrawDownList" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		<if test="analysisProductPeriod != null">
+			SELECT base.date,base.product_id productID,#{analysisProductPeriod.KPI,jdbcType=VARCHAR} KPI,
+				#{analysisProductPeriod.dataSource,jdbcType=VARCHAR} dataSource,
+				DATE_FORMAT( current_date(), '%Y%m%d') statDate,
+				null today,
+				null oneMonth,
+				null threeMonth,
+				null sixMonth,
+				null oneYear,
+				(case when periodlist.until_now &gt; base.net_accumulative_value then format((periodlist.until_now-base.net_accumulative_value)/periodlist.until_now ,8)*-1
+					else 0 end) untilNow,
+				null thisYear
+			from t_product_net_value base 
+			left join (select * from (select date,product_id,until_now from t_product_period_kpi_statistics where date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR} and KPI = '020041' order by date)X group by product_id) periodlist on periodlist.product_id = base.product_id 
+			left join t_product p on base.product_id = p.id
+			where base.date = #{analysisProductPeriod.statDate,jdbcType=VARCHAR}
+			<if test="analysisProductPeriod.productID != null and analysisProductPeriod.productID != ''">
+				and base.product_id = #{analysisProductPeriod.productID,jdbcType=VARCHAR}
+			</if>
+		</if>
+	
+	</select>
+	
+	<!-- 计算产品水下回撤 -->
+	<select id="calculateUnderWaterDrawDownByPeriod" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date DATE,
+		  t.product_id productID,
+		  #{kpiCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL today,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  (1- t.net_accumulative_value) untilNow 
+		FROM
+		  t_product_net_value t 
+		  LEFT JOIN 
+		    (SELECT 
+		      * 
+		    FROM
+		      (SELECT 
+		        t.date DATE,
+		        t.product_id,
+		        t.net_accumulative_value 
+		      FROM
+		        t_product_net_value t 
+		      WHERE t.date &lt; #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		      GROUP BY t.product_id,
+		        t.date DESC) temp 
+		    GROUP BY temp.product_id) lastDay 
+		    ON t.product_id = lastDay.product_id 
+		WHERE t.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  AND t.net_accumulative_value &lt; 1 
+		  AND lastDay.net_accumulative_value &lt; 1 
+		  AND lastDay.net_accumulative_value > t.net_accumulative_value 
+			<if test="kpiCalculationRequest.productId != null and kpiCalculationRequest.productId != ''">
+				and t.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+	<!-- 水下最大回撤 -->
+	<select id="calculateMaxUnderWaterDrawDownByPeriod" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  tp. DATE  DATE,
+		  tp. product_id  productID,
+		  #{kpiCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL today,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  maxUnderWater.until_now untilNow 
+		FROM
+		  t_product_period_kpi_statistics tp 
+		  LEFT JOIN 
+		    (SELECT 
+		      t. product_id ,
+		      max(t. until_now ) until_now 
+		    FROM
+		       t_product_period_kpi_statistics  t 
+		    WHERE t. DATE  &lt;= #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		      AND t. KPI  = '020050' 
+		    GROUP BY t. product_id ) maxUnderWater 
+		    ON maxUnderWater.product_id = tp.product_id 
+		WHERE tp. DATE  = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  AND tp. KPI  = '020050' 
+		  <if test="kpiCalculationRequest.productId != null and kpiCalculationRequest.productId != ''">
+				and tp.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+		  </if>
+	</select>
+	<!-- 计算产品水上回撤 -->
+	<select id="calculateWaterDrawDownByPeriod" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  t.date DATE,
+		  t.product_id productID,
+		  #{kpiCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL today,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  (
+		    temp.netAccumulativeValue - t.net_accumulative_value
+		  ) untilNow 
+		FROM
+		  t_product_net_value t 
+		  LEFT JOIN 
+		    (SELECT 
+		      * 
+		    FROM
+		      (SELECT 
+		        t.date DATE,
+		        t.product_id,
+		        t.net_accumulative_value 
+		      FROM
+		        t_product_net_value t 
+		      WHERE t.date &lt; #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		      GROUP BY t.product_id,
+		        t.date DESC) temp 
+		    GROUP BY temp.product_id) lastDay 
+		    ON t.product_id = lastDay.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      MAX(a.net_accumulative_value) netAccumulativeValue 
+		    FROM
+		      t_product_net_value a 
+		    WHERE a.date &lt; #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		    GROUP BY a.product_id) temp 
+		    ON t.product_id = temp.product_id 
+		WHERE t.date = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  AND lastDay.net_accumulative_value >= 1 
+		  AND lastDay.net_accumulative_value > t.net_accumulative_value 
+			<if test="kpiCalculationRequest.productId != null and kpiCalculationRequest.productId != ''">
+				and t.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+			</if>
+	</select>
+	
+	<!-- 水上最大回撤 -->
+	<select id="calculateMaxWaterDrawDownByPeriod" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  tp. DATE  DATE,
+		  tp. product_id  productID,
+		  #{kpiCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  NULL today,
+		  NULL oneMonth,
+		  NULL threeMonth,
+		  NULL sixMonth,
+		  NULL oneYear,
+		  NULL thisYear,
+		  maxUnderWater.until_now untilNow 
+		FROM
+		  t_product_period_kpi_statistics tp 
+		  LEFT JOIN 
+		    (SELECT 
+		      t. product_id ,
+		      MAX(t. until_now ) until_now 
+		    FROM
+		       t_product_period_kpi_statistics  t 
+		    WHERE t. DATE  &lt;= #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		      AND t. KPI  = '020051' 
+		    GROUP BY t. product_id ) maxUnderWater 
+		    ON maxUnderWater.product_id = tp.product_id 
+		WHERE tp. DATE  = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  AND tp. KPI  = '020051' 
+		  <if test="kpiCalculationRequest.productId != null and kpiCalculationRequest.productId != ''">
+				and tp.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+		  </if>
+	</select>
+	
+	<!-- 产品最大回撤（按产品周期） -->
+	<select id="calculateProductDrawdownPeroid" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT 
+		  tp.date DATE,
+		  tp.product_id productID,
+		  #{kpiCalculationRequest.kpi ,jdbcType=VARCHAR} kpi,
+		  #{kpiCalculationRequest.dataSource ,jdbcType=VARCHAR} dataSource,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') statDate,
+		  tp.until_now today,
+		  oneMonthTemp.one_month oneMonth,
+		  threeMonthTemp.three_month threeMonth,
+		  sixMonthTemp.six_month sixMonth,
+		  oneYearTemp.one_year oneYear,
+		  untilNowTemp.until_now untilNow,
+		  thisYearTemp.this_year thisYear 
+		FROM
+		  t_product_period_kpi_statistics tp 
+		  LEFT JOIN 
+		    (SELECT 
+		      b1.product_id,
+		      MIN(b1.until_now) one_month 
+		    FROM
+		      t_product_period_kpi_statistics b1 
+		    WHERE b1.KPI = '030033' 		      
+		      AND b1.date &gt;=  #{kpiCalculationRequest.oneMonth,jdbcType=VARCHAR}
+		      AND b1.date &lt;=  #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}
+		    GROUP BY b1.product_id) oneMonthTemp 
+		    ON tp.product_id = oneMonthTemp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      b1.product_id,
+		      MIN(b1.until_now) three_month 
+		    FROM
+		      t_product_period_kpi_statistics b1 
+		    WHERE b1.KPI = '030033' 
+		      AND b1.date &gt;=  #{kpiCalculationRequest.threeMonth,jdbcType=VARCHAR}
+		      AND b1.date &lt;=  #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}
+		    GROUP BY b1.product_id) threeMonthTemp 
+		    ON tp.product_id = threeMonthTemp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      b1.product_id,
+		      MIN(b1.until_now) six_month 
+		    FROM
+		      t_product_period_kpi_statistics b1 
+		    WHERE b1.KPI = '030033' 
+		      AND b1.date &gt;=  #{kpiCalculationRequest.sixMonth,jdbcType=VARCHAR}
+		      AND b1.date &lt;=  #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}
+		    GROUP BY b1.product_id) sixMonthTemp 
+		    ON tp.product_id = sixMonthTemp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      b1.product_id,
+		      MIN(b1.until_now) one_year 
+		    FROM
+		      t_product_period_kpi_statistics b1 
+		    WHERE b1.KPI = '030033' 
+		      AND b1.date &gt;=  #{kpiCalculationRequest.oneYear,jdbcType=VARCHAR}
+		      AND b1.date &lt;=  #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}
+		    GROUP BY b1.product_id) oneYearTemp 
+		    ON tp.product_id = oneYearTemp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      b1.product_id,
+		      MIN(b1.until_now) this_year 
+		    FROM
+		      t_product_period_kpi_statistics b1 
+		    WHERE b1.KPI = '030033' 
+		      AND b1.date &gt;=  #{kpiCalculationRequest.thisYear,jdbcType=VARCHAR}
+		      AND b1.date &lt;=  #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}
+		    GROUP BY b1.product_id) thisYearTemp 
+		    ON tp.product_id = thisYearTemp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      b1.product_id,
+		      MIN(b1.until_now) until_now 
+		    FROM
+		      t_product_period_kpi_statistics b1 
+		    WHERE b1.KPI = '030033' 
+		     and DATE &lt;=  #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}
+		    GROUP BY b1.product_id) untilNowTemp 
+		    ON tp.product_id = untilNowTemp.product_id 
+		WHERE tp. DATE  = #{kpiCalculationRequest.statDate ,jdbcType=VARCHAR} 
+		  AND tp. KPI  = '030033' 
+		  <if test="kpiCalculationRequest.productId != null and kpiCalculationRequest.productId != ''">
+				and tp.product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR}
+		  </if>
+	</select>
+</mapper>

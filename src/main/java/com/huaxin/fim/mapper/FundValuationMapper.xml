@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.FundValuationMapper">
+	
+	<!-- 资产基金的估值表的市值-->
+	<select id="getFundValuationList" parameterType="map" resultType="com.quantdo.iwin.entity.FundValuation">
+		SELECT 															
+		  DATE_FORMAT(t.ywrq, '%Y%m%d') DATE,                            
+		  #{productId,jdbcType=VARCHAR} productId,                                          
+		  #{dataSource,jdbcType=VARCHAR} dataSource,                                        
+		  t.kmdm accountCode,                                                      
+		  t.kmmc accountName,                                                      
+		  t.sl amount,                                                          
+		  t.dwcb unitCost,                                                        
+		  t.cb cost,                                                          
+		  t.cbzjz netValueCostRatio,                                                       
+		  t.hqjz marketValue,                                                        
+		  t.sz marketCapitalization,                                                          
+		  t.szzjz netValueMarketCapitalizationValue,                                                       
+		  t.gzzz appreciationValuation,                                                        
+		  t.stock_suspension_message stockSuspensionMessage,                                    
+		  CASE                                                           
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 1                                   
+		    THEN LEFT(t.kmdm, 4)                                         
+		    ELSE NULL                                                    
+		  END firstClassAccountCode,                                                
+		  CASE                                                           
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 1                                   
+		    THEN firstTemp.kmmc                                             
+		    ELSE NULL                                                    
+		  END firstClassAccountName,                                                
+		  CASE                                                           
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 2                                   
+		    THEN LEFT(t.kmdm, 6)                                         
+		    ELSE NULL                                                    
+		  END secondClassAccountCode,                                                 
+		  CASE                                                           
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 2                                   
+		    THEN secondTemp.kmmc 
+		    ELSE NULL                                            
+		  END secondClassAccountName,                                                 
+		  CASE                                                           
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 3                                   
+		    THEN LEFT(t.kmdm, 8)                                        
+		    ELSE NULL                                                    
+		  END thirdClassAccountCode,                                                  
+		  CASE                                                           
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 3                                   
+		    THEN thirdTemp.kmmc    
+		    ELSE NULL                                          
+		  END thirdClassAccountName,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate ,
+		  t.trustee_id   trusteeId             
+		FROM                                                             
+		  t_raw_xin_fund_asset t   
+		 LEFT JOIN                             
+		   (SELECT                             
+		     a.kmmc,                           
+		     a.kmdm                            
+		   FROM                                
+		     t_raw_xin_fund_asset a            
+		   WHERE CHARACTER_LENGTH(a.kmdm) &lt; 5  
+		     AND a.kmdm IS NOT NULL            
+		     AND a.kmdm &lt;&gt; ''                  
+		     AND ASCII(a.kmdm) &lt; 127           
+		  AND a.ywrq = #{date,jdbcType=VARCHAR}     
+		  AND a.product_id = #{productId,jdbcType=VARCHAR}   
+		   GROUP BY a.kmdm) firstTemp          
+		   ON firstTemp.kmdm = LEFT(t.kmdm, 4) 
+		 LEFT JOIN                             
+		   (SELECT                             
+		     a.kmmc,                           
+		     a.kmdm                            
+		   FROM                                
+		     t_raw_xin_fund_asset a            
+		   WHERE CHARACTER_LENGTH(a.kmdm) &lt; 7  
+		     AND a.kmdm IS NOT NULL            
+		     AND a.kmdm &lt;&gt; ''                  
+		     AND ASCII(a.kmdm) &lt; 127           
+		  AND a.ywrq = #{date,jdbcType=VARCHAR}     
+		  AND a.product_id = #{productId,jdbcType=VARCHAR}   
+		   GROUP BY a.kmdm) secondTemp         
+		   ON secondTemp.kmdm = LEFT(t.kmdm, 6)
+		 LEFT JOIN                             
+		   (SELECT                             
+		     a.kmmc,                           
+		     a.kmdm                            
+		   FROM                                
+		     t_raw_xin_fund_asset a            
+		   WHERE CHARACTER_LENGTH(a.kmdm) &lt; 9  
+		     AND a.kmdm IS NOT NULL            
+		     AND a.kmdm &lt;&gt; ''                  
+		     AND ASCII(a.kmdm) &lt; 127           
+		  AND a.ywrq = #{date,jdbcType=VARCHAR}     
+		  AND a.product_id = #{productId,jdbcType=VARCHAR}   
+		   GROUP BY a.kmdm) thirdTemp          
+		   ON thirdTemp.kmdm = LEFT(t.kmdm, 8)                                    
+		WHERE ASCII(t.kmdm) &lt; 127                                        
+		  AND t.kmdm IS NOT NULL                                         
+		  AND t.kmdm &lt;&gt; ''                                               
+		  AND CHARACTER_LENGTH(t.kmdm) = #{accountCodelength,jdbcType=VARCHAR} 	  
+		  AND t.ywrq = #{date,jdbcType=VARCHAR}     
+		  AND t.product_id = #{productId,jdbcType=VARCHAR} 	  
+	</select>
+
+
+	<!-- 资产基金的估值表的市值-->
+	<select id="getRawFundList" parameterType="map" resultType="com.quantdo.iwin.entity.FundValuation">
+		SELECT
+		  DATE_FORMAT(t.ywrq, '%Y%m%d') DATE,
+		  #{productId,jdbcType=VARCHAR} productId,
+		  #{dataSource,jdbcType=VARCHAR} dataSource,
+		  t.kmdm accountCode,
+		  t.kmmc accountName,
+		  t.sl amount,
+		  t.dwcb unitCost,
+		  t.cb cost,
+		  t.cbzjz netValueCostRatio,
+		  t.hqjz marketValue,
+		  t.sz marketCapitalization,
+		  t.szzjz netValueMarketCapitalizationValue,
+		  t.gzzz appreciationValuation,
+		  t.stock_suspension_message stockSuspensionMessage,
+		  CASE
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 1
+		    THEN LEFT(t.kmdm, 4)
+		    ELSE NULL
+		  END firstClassAccountCode,
+		  CASE
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 1
+		    THEN firstTemp.kmmc
+		    ELSE NULL
+		  END firstClassAccountName,
+		  CASE
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 2
+		    THEN LEFT(t.kmdm, 6)
+		    ELSE NULL
+		  END secondClassAccountCode,
+		  CASE
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 2
+		    THEN secondTemp.kmmc
+		    ELSE NULL
+		  END secondClassAccountName,
+		  CASE
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 3
+		    THEN LEFT(t.kmdm, 8)
+		    ELSE NULL
+		  END thirdClassAccountCode,
+		  CASE
+		    WHEN #{accountCodeLevel,jdbcType=VARCHAR} &gt; 3
+		    THEN thirdTemp.kmmc
+		    ELSE NULL
+		  END thirdClassAccountName,
+		  DATE_FORMAT(CURRENT_DATE(), '%Y%m%d') updateDate ,
+		  t.trustee_id   trusteeId
+		FROM
+		  t_raw_fund_valuation t
+		 LEFT JOIN
+		   (SELECT
+		     a.kmmc,
+		     a.kmdm
+		   FROM
+		     t_raw_fund_valuation a
+		   WHERE CHARACTER_LENGTH(a.kmdm) &lt; 5
+		     AND a.kmdm IS NOT NULL
+		     AND a.kmdm &lt;&gt; ''
+		     AND ASCII(a.kmdm) &lt; 127
+		  AND a.ywrq = #{date,jdbcType=VARCHAR}
+		  AND a.product_id = #{productId,jdbcType=VARCHAR}
+		   GROUP BY a.kmdm,a.kmmc) firstTemp
+		   ON firstTemp.kmdm = LEFT(t.kmdm, 4)
+		 LEFT JOIN
+		   (SELECT
+		     a.kmmc,
+		     a.kmdm
+		   FROM
+		     t_raw_fund_valuation a
+		   WHERE CHARACTER_LENGTH(a.kmdm) &lt; 7
+		     AND a.kmdm IS NOT NULL
+		     AND a.kmdm &lt;&gt; ''
+		     AND ASCII(a.kmdm) &lt; 127
+		  AND a.ywrq = #{date,jdbcType=VARCHAR}
+		  AND a.product_id = #{productId,jdbcType=VARCHAR}
+		   GROUP BY a.kmdm,a.kmmc) secondTemp
+		   ON secondTemp.kmdm = LEFT(t.kmdm, 6)
+		 LEFT JOIN
+		   (SELECT
+		     a.kmmc,
+		     a.kmdm
+		   FROM
+		     t_raw_fund_valuation a
+		   WHERE CHARACTER_LENGTH(a.kmdm) &lt; 9
+		     AND a.kmdm IS NOT NULL
+		     AND a.kmdm &lt;&gt; ''
+		     AND ASCII(a.kmdm) &lt; 127
+		  AND a.ywrq = #{date,jdbcType=VARCHAR}
+		  AND a.product_id = #{productId,jdbcType=VARCHAR}
+		   GROUP BY a.kmdm,a.kmmc) thirdTemp
+		   ON thirdTemp.kmdm = LEFT(t.kmdm, 8)
+		WHERE ASCII(t.kmdm) &lt; 127
+		  AND t.kmdm IS NOT NULL
+		  AND t.kmdm &lt;&gt; ''
+		  AND CHARACTER_LENGTH(t.kmdm) = #{accountCodelength,jdbcType=VARCHAR}
+		  AND t.ywrq = #{date,jdbcType=VARCHAR}
+		  AND t.product_id = #{productId,jdbcType=VARCHAR}
+	</select>
+
+
+
+	
+</mapper>

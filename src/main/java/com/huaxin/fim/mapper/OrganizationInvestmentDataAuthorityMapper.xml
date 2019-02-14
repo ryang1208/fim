@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.OrganizationInvestmentDataAuthorityMapper">
+	<!-- 获取已选投顾列表 -->
+	<select id="getCheckedInvestmentList"  parameterType="map" resultType="com.quantdo.standard.entity.investmentManager.InvestmentManager">
+		SELECT 
+		  p.id id,
+		  p.company_name companyName,
+		  p.organization_id organizationId
+		FROM
+		  t_investment_manager p 
+	  where 
+	    1=1
+	  	<if test="investerMangertIds != null and investerMangertIds != ''">
+		  	and p.id  in 
+		   	<foreach item="investerMangerId" index="index" collection="investerMangertIds" open="(" separator="," close=")">  
+		            #{investerMangerId}  
+		    </foreach>
+	    </if>
+	    ORDER BY p.id
+	</select>
+	
+	<!-- 获取可选投顾列表 -->
+	<select id="getNotCheckedInvestmentList"  parameterType="map" resultType="com.quantdo.standard.entity.investmentManager.InvestmentManager">
+		SELECT 
+		  p.id id,
+		  p.company_name companyName,
+		  p.organization_id organizationId
+		FROM
+		  t_investment_manager p 
+	  where
+	  	1=1
+	  	<if test="investerMangertIds != null and investerMangertIds != ''">
+		  	and p.id not in 
+		   	<foreach item="investerMangerId" index="index" collection="investerMangertIds" open="(" separator="," close=")">  
+		            #{investerMangerId}  
+		    </foreach>
+	    </if>
+	    ORDER BY p.id
+	</select>
+	
+</mapper>

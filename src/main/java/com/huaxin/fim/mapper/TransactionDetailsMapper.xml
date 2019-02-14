@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.TransactionDetailsMapper">
+
+   <select id="getTransactionDetails" parameterType="map"
+		resultType="com.quantdo.iwin.entity.TransactionDetails">
+		SELECT DISTINCT
+		details.date DATE,
+		details.invester_id investerID
+		FROM
+		t_transaction_details details
+		LEFT JOIN
+		(SELECT DISTINCT
+		summary.date,
+		summary.invester_id,
+		summary.data_source
+		FROM
+		t_transaction_summary summary) summary
+		ON summary.invester_id = details.invester_id
+		AND summary.date = details.date
+		AND details.data_source = summary.data_source
+		WHERE summary.date IS NULL
+		ORDER BY details.date ASC
+	</select>
+
+   <select id="getTransactionDetailsByIdList" parameterType="map"
+		resultType="com.quantdo.iwin.entity.TransactionDetails">
+		SELECT DISTINCT 
+		  details.date DATE,
+		  details.invester_id investerID 
+		FROM
+		  t_transaction_details details 
+		  LEFT JOIN t_transaction_summary summary 
+		    ON summary.invester_id = details.invester_id 
+		    AND summary.date = details.date 
+		    AND details.data_source = summary.data_source 
+		  LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship tp 
+		    WHERE product_id IN 
+		   		 <foreach item="productId" index="index" collection="productIdList" open="(" separator="," close=")">  
+			            #{productId}  
+		  		</foreach>
+		    
+		    ) AS temp 
+		    ON 1 = 1 
+		WHERE details.invester_id IN (temp.invester_id) 
+		  AND details.broker_id IN (temp.broker_id) 
+		  AND (
+		    summary.date IS NULL 
+		    OR (
+		      summary.update_date &lt;&gt; details.update_date
+		    )
+		  ) 
+		ORDER BY details.date ASC 
+	</select>
+    
+	<select id="getJSDTransactionDetails" parameterType="map"
+		resultType="com.quantdo.iwin.entity.TransactionDetails">
+		SELECT 
+		  t.date date,
+		  t.invester_id investerID,
+		  SUM(IFNULL(t.close_profit,0)) closeProfit,
+		  SUM(IFNULL(t.close_profit_hedge,0)) closeProfitHedge
+		FROM
+		  t_transaction_details t 
+		WHERE 
+		<if test="transactionDetails.date  != null and transactionDetails.date != '' ">
+            t.date =#{transactionDetails.date ,jdbcType=VARCHAR}
+		</if>
+		<if test="transactionDetails.investerID  != null and transactionDetails.investerID != '' ">
+			AND t.invester_id =#{transactionDetails.investerID ,jdbcType=VARCHAR}
+		</if>
+	</select>
+	
+	<select id="getTransactionDetailsByType" parameterType="map"
+		resultType="com.quantdo.iwin.entity.TransactionDetails">
+		SELECT DISTINCT details.date date,details.invester_id investerID FROM
+		t_transaction_details
+		details
+		where 1 = 1
+		<if
+			test="transactionDetails.dataSource  != null and transactionDetails.dataSource != '' ">
+			AND details.data_source = #{transactionDetails.dataSource
+			,jdbcType=VARCHAR}
+		</if>
+		ORDER BY details.date ASC
+	</select>
+
+</mapper>

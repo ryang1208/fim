@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.TransactionSummaryMapper">
+
+	<select id="getTransactionSummaryByType" parameterType="map"
+		resultType="com.quantdo.iwin.entity.TransactionSummary">
+		SELECT DISTINCT trans.date date,trans.invester_id investerID FROM
+		t_transaction_summary trans
+		where 1 = 1
+		<if
+			test="transactionSummary.dataSource  != null and transactionSummary.dataSource != '' ">
+			AND trans.data_source = #{transactionSummary.dataSource
+			,jdbcType=VARCHAR}
+		</if>
+	</select>
+	<select id="getTransactionSummary" parameterType="map"
+		resultType="com.quantdo.iwin.entity.TransactionSummary">
+		SELECT DISTINCT summary.date DATE,summary.invester_id investerID,summary.data_source dataSource,summary.variety_id varietyID,
+		summary.industry industry,summary.market_type marketType,summary.update_date updateDate
+		FROM t_transaction_summary summary
+		LEFT JOIN(SELECT DISTINCT
+		variety_summary.date,
+		variety_summary.invester_id,
+		variety_summary.data_source,
+		variety_summary.update_date 
+		FROM
+		t_variety_summary variety_summary)variety_summary
+		ON summary.invester_id = variety_summary.invester_id
+		AND summary.date = variety_summary.date
+		AND variety_summary.data_source = summary.data_source
+		AND variety_summary.update_date = summary.update_date
+		WHERE variety_summary.date IS NULL
+		AND summary.update_date IS NOT NULL
+		ORDER BY summary.date ASC
+	</select>
+	
+	<select id="getTransactionSummaryByIdList" parameterType="map"
+		resultType="com.quantdo.iwin.entity.TransactionSummary">
+		SELECT DISTINCT 
+		  summary.date DATE,
+		  summary.invester_id investerID,
+		  summary.data_source dataSource
+		FROM
+		  t_transaction_summary summary 
+		  LEFT JOIN 
+		    (SELECT DISTINCT 
+		      variety_summary.date,
+		      variety_summary.invester_id,
+		      variety_summary.data_source,
+		      variety_summary.update_date 
+		    FROM
+		      t_variety_summary variety_summary) variety_summary 
+		    ON summary.invester_id = variety_summary.invester_id 
+		    AND summary.date = variety_summary.date 
+		    AND variety_summary.data_source = summary.data_source 
+		LEFT JOIN 
+		    (SELECT 
+		      invester_id,
+		      broker_id 
+		    FROM
+		      t_product_invester_relationship tp 
+		    WHERE product_id IN 
+		            <foreach item="productId" index="index" collection="productIdList" open="(" separator="," close=")">  
+			            #{productId}  
+			  		</foreach>
+			  		) AS temp 
+		    ON 1 = 1 
+		WHERE summary.invester_id IN (temp.invester_id) 
+		  AND summary.broker_id IN (temp.broker_id) 
+		  AND (
+		    variety_summary.date IS NULL 
+		    OR (
+		      summary.update_date &lt;&gt; variety_summary.update_date
+		    )
+		  ) 
+		ORDER BY summary.date ASC 
+	</select>
+	
+	<select id="getTransactionSummaryByTransactionDetails"
+		parameterType="map" resultType="com.quantdo.iwin.entity.TransactionSummary">
+		SELECT t.date DATE,
+		t.invester_id investerID,
+		t.broker_id brokerID,
+		t.contact contact,
+		t.bs bs,
+		t.oc oc,
+		t.sh sh,
+		t.price price,
+		tc.asset_type marketType,
+		tc.industry industry,
+        tc.variety_id varietyID,
+        t.update_date updateDate,
+		SUM(IFNULL(t.lots,0)) lots,
+		SUM(IFNULL(t.turnover,0)) turnover,
+		SUM(IFNULL(t.commission,0)) commission,
+		SUM(t.close_profit) closeProfit,
+        SUM(t.close_profit_hedge) closeProfitHedge,
+		t.data_source dataSource
+		FROM t_transaction_details t
+		LEFT JOIN  t_contract tc ON 
+        tc.contract=t.contact AND tc.date = t.date
+		WHERE
+		1=1
+		<if test="transactionDetails.date  != null and transactionDetails.date != '' ">
+			AND t.date =#{transactionDetails.date ,jdbcType=VARCHAR}
+		</if>
+		<if test="transactionDetails.investerID  != null and transactionDetails.investerID != '' ">
+			AND t.invester_id =#{transactionDetails.investerID ,jdbcType=VARCHAR}
+		</if>
+		GROUP BY t.date,t.invester_id,t.broker_id,t.contact,t.price,t.bs,t.oc
+	</select>
+</mapper>

@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.BondVarietyAnalysisStatisticsMapper">
+
+	<!-- 持仓不同期限债券占比图 -->
+	<select id="getBondPaymentPeriodList" parameterType="map" resultType="com.quantdo.iwin.response.CategoryResponse">
+		<if test="varietyAnalysisRequest != null">	 
+	          SELECT	t.date,
+				t2.today firstCategory,
+				t3.today secondCategory,
+				t4.today thirdCategory
+				FROM
+				(SELECT DISTINCT product_id, DATE FROM t_product_period_kpi_statistics WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} AND (KPI = '020102' OR KPI = '020103' OR KPI = '020104')) t 
+				LEFT JOIN (SELECT DATE,today FROM t_product_period_kpi_statistics t WHERE t.KPI = '020102' AND t.product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR}) t2 ON t.date = t2.date
+				LEFT JOIN (SELECT DATE,today FROM t_product_period_kpi_statistics t WHERE t.KPI = '020103' AND t.product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR}) t3 ON t.date = t3.date
+				LEFT JOIN (SELECT DATE,today FROM t_product_period_kpi_statistics t WHERE t.KPI = '020104' AND t.product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR}) t4 ON t.date = t4.date
+				WHERE (t2.today+t3.today+t4.today) IS NOT NULL
+			  	 <if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          	and	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+		          	and	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+		    ORDER BY t.date
+		  </if>
+  </select>
+  
+  <!-- 债券持仓评级占比 -->
+	<select id="getBondRatingList" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		<if test="varietyAnalysisRequest != null">	 
+			SELECT TT.date,TT.productName,TT.rating TYPE,IFNULL(dataList.value,0)VALUE
+			FROM 
+			(
+				SELECT org.date,base.rating,org.data_describe productName FROM
+				(SELECT DISTINCT t.rating 
+					FROM t_product_rating_kpi_statistics t
+					WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+					AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+					<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+		          	 )base
+				INNER JOIN(SELECT DISTINCT DATE,dic.data_describe 
+					FROM t_product_rating_kpi_statistics t
+					LEFT JOIN t_iwin_data_dictionary dic ON t.organization =dic.data_value AND dic.data_type = 'EvaluateOrganization'
+					WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+					AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+					<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+					) org
+					)TT
+			LEFT JOIN
+			(SELECT t.date,t.rating TYPE,t.value VALUE
+				FROM t_product_rating_kpi_statistics t
+				WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+				AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+				<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          	AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+	          	 </if>
+			 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+		          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+	          	 </if>
+				) dataList ON TT.rating = dataList.type AND TT.date = dataList.date
+			ORDER BY TT.date,TT.rating
+		  </if>
+  </select>
+  
+  <!-- 债券持仓利率类型占比图 -->
+	<select id="getBondInterestRateList" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		<if test="varietyAnalysisRequest != null">	 
+	          SELECT TT.date,TT.productName TYPE,IFNULL(dataList.value,0)VALUE
+			FROM 
+			(
+				SELECT base.date,org.variety,org.data_describe productName FROM
+				(SELECT DISTINCT DATE
+					FROM t_product_period_variety_kpi_statistics t
+					WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+					AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+					<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+		          	 )base
+				INNER JOIN(SELECT DISTINCT t.variety ,dic.data_describe
+					FROM t_product_period_variety_kpi_statistics t
+					LEFT JOIN t_foreign_data_dictionary dic ON t.variety =dic.data_value AND dic.data_type = 'BondInterestRateType'
+					WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+					AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+					<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+					) org
+					)TT
+			LEFT JOIN
+			(SELECT t.date,t.variety TYPE,t.today VALUE
+				FROM t_product_period_variety_kpi_statistics t
+				WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+				AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+				<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+				) dataList ON TT.variety = dataList.type AND TT.date = dataList.date
+			ORDER BY TT.date,TT.variety
+		  </if>
+  </select>
+  
+  <!-- 债券持仓券种类型/债券持仓利率类型占比 -->
+	<select id="getBondTypeList" parameterType="map" resultType="com.quantdo.iwin.response.RatioResponse">
+		<if test="varietyAnalysisRequest != null">	 
+			SELECT TT.date,TT.productName TYPE,IFNULL(dataList.value,0)VALUE
+			FROM 
+			(
+				SELECT base.date,org.variety,org.data_describe productName FROM
+				(SELECT DISTINCT DATE
+					FROM t_product_period_variety_kpi_statistics t
+					WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+					AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+					<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+		          	 )base
+				INNER JOIN(SELECT DISTINCT t.variety ,dic.data_describe
+					FROM t_product_period_variety_kpi_statistics t
+					LEFT JOIN t_foreign_data_dictionary dic ON t.variety =dic.data_value AND dic.data_type = 'BondType'
+					WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+					AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+					<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+					) org
+					)TT
+			LEFT JOIN
+			(SELECT t.date,t.variety TYPE,t.today VALUE
+				FROM t_product_period_variety_kpi_statistics t
+				WHERE product_id = #{varietyAnalysisRequest.productId,jdbcType=VARCHAR} 
+				AND KPI = #{varietyAnalysisRequest.kpiCode,jdbcType=VARCHAR}
+				<if test="varietyAnalysisRequest.beginDate != null and varietyAnalysisRequest.beginDate !=''">
+		          		AND	t.date &gt;= #{varietyAnalysisRequest.beginDate,jdbcType=VARCHAR}
+		          	 </if>
+				 	 <if test="varietyAnalysisRequest.endDate != null and varietyAnalysisRequest.endDate !=''">
+			          	AND	t.date &lt;= #{varietyAnalysisRequest.endDate,jdbcType=VARCHAR}
+		          	 </if>
+				) dataList ON TT.variety = dataList.type AND TT.date = dataList.date
+			ORDER BY TT.date,TT.variety
+		  </if>
+  </select>
+</mapper>

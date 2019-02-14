@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.MarketValueRiskValueMapper">
+	
+	<!-- 资产基金的估值表的市值-->
+	<select id="FundMarketValue" parameterType="map" resultType="com.quantdo.iwin.entity.FundValuationMessage">
+		SELECT product_id productId,
+				IFNULL(asset_value ,0)market_value
+		FROM t_product_net_value 
+		WHERE product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR} 
+			AND DATE = #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}
+	</select>
+	
+	
+		<!-- 资产基金的估值的时间权重-->
+	<select id="rikeValueTimeWeight" parameterType="map" resultType="com.quantdo.iwin.entity.FundValuationMessage">
+		SELECT  
+			X.DATE DATE,
+			X.productId productId,
+			NULL dataSource,
+			NULL VALUE,
+			NULL market_value,
+			NULL appreciation_valuation,
+			x.propportion propportion	
+			FROM
+			  (SELECT 
+			b.date DATE,
+			b.product_id productId,
+			(case when date &lt;= 0 then 0 
+				else TRUNCATE((POWER(CONVERT(a.parameter_value, DECIMAL (5, 2)), b.date - 1)) * (1.0- CONVERT(a.parameter_value, DECIMAL (5, 2))) 
+					/ (1- POWER(CONVERT(a.parameter_value, DECIMAL (5, 2)), b.date)),10) end) propportion 
+			  FROM
+			    (SELECT product_id product_id,
+					COUNT(DATE)-2 DATE
+				FROM t_product_net_value 
+				 WHERE product_id = #{kpiCalculationRequest.productId,jdbcType=VARCHAR} 
+				 AND DATE &lt;= #{kpiCalculationRequest.statDate,jdbcType=VARCHAR}  ) b 
+			    JOIN 
+			      (SELECT 
+				t.parameter_code,
+				t.parameter_value,
+				t.parameter_describe 
+			      FROM
+				t_custom_parameter t 
+			      WHERE t.parameter_code = 'TimeWeight') a 
+			  GROUP BY b.product_id,
+			    DATE ASC) X
+			GROUP BY X.productId 
+	</select>
+	
+	
+		<!-- 资产基金的时间权重-->
+	<select id="TimeWeight" parameterType="map" resultType="com.quantdo.iwin.entity.CustomParameter">
+							SELECT 
+						  t.parameter_code parameterCode,
+						  t.parameter_value parameterDescribe,
+						  t.parameter_describe parameterValue 
+						FROM
+						  t_custom_parameter t 
+						WHERE t.parameter_code = 'TimeWeight' 					
+	</select>
+</mapper>

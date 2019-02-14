@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ContrastAnalysisMapper">
+	<!-- 产品累计收益率 -->
+	<select id="getYieldRatioList"  parameterType="map" resultType="com.quantdo.iwin.response.TotalYieldRatioResponse">
+		SELECT 
+		  p.product_name productName,
+		  temp.product_id productId,
+		  temp.date,
+		  ROUND(
+		    (
+		      CASE
+		        WHEN #{request.periodType,jdbcType=VARCHAR} = '1' 
+		        THEN temp.one_month 
+		        WHEN #{request.periodType,jdbcType=VARCHAR} = '2' 
+		        THEN temp.three_month 
+		        WHEN #{request.periodType,jdbcType=VARCHAR} = '3' 
+		        THEN temp.six_month 
+		        WHEN #{request.periodType,jdbcType=VARCHAR} = '4' 
+		        THEN temp.this_year 
+		        WHEN #{request.periodType,jdbcType=VARCHAR} = '5' 
+		        THEN temp.one_year 
+		        WHEN #{request.periodType,jdbcType=VARCHAR} = '0' 
+		        THEN temp.until_now 
+		      END
+		    ) * 100,
+		    2
+		  ) amount 
+		FROM
+		  t_product_period_kpi_statistics temp 
+		left join t_product p on
+		temp.product_id = p.id
+		WHERE temp.kpi = '020032' 
+		  AND  temp.product_id IN
+		  <foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         	#{productId}  
+    	  </foreach>
+    	  order by temp.date ,temp.product_id DESC
+	</select>
+	
+	<!-- 产品净值回撤率 -->
+	<select id="getContrastDrawDownList"  parameterType="map" resultType="com.quantdo.iwin.response.TotalDrawDownResponse">
+		SELECT 
+				p.product_name productName,
+				t.product_id productID,
+				t.date,
+				format(t.until_now*100.00,2) amount,
+				minlist.min_amount minAmount
+			FROM
+			  t_product_period_kpi_statistics t 
+			left join t_product p on char(t.product_id) = char(p.id)
+			left join (select format(min(until_now)*100.00,2) min_amount,product_id
+				from t_product_period_kpi_statistics 
+				where KPI = '030033' 
+					<if test="request.beginDate != null and request.beginDate != ''">
+		 				AND date >= #{request.beginDate,jdbcType=VARCHAR} 
+					</if>
+		 			AND product_id in
+		 			<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         				#{productId}  
+    	 	 		</foreach>
+				GROUP BY product_id)minlist on t.product_id = minlist.product_id
+			WHERE t.KPI = '030033'
+				<if test="request.beginDate != null and request.beginDate != ''">
+		 			AND t.date >= #{request.beginDate,jdbcType=VARCHAR} 
+				</if>
+				AND t.product_id in
+			 	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+    	  	order by t.date ,t.product_id DESC
+	</select>
+	
+	<!-- 净值5日滚动波动率 -->
+	<select id="getContrastFiveDayFluctuationList"  parameterType="map" resultType="com.quantdo.iwin.response.TotalFiveDayFluctuationResponse">
+		SELECT 
+		  t.date date,
+		  t.product_id productId,
+		  p.product_name productName,
+		  FORMAT(nn.today * 100.00, 2) fiveDayFluctuation,
+		  FORMAT(t.net_accumulative_value,4) netValue 
+		FROM
+		  t_product_net_value t 
+		  LEFT JOIN t_product p 
+		    ON CHAR(t.product_id) = CHAR(p.id) 
+		  LEFT JOIN 
+		    (SELECT 
+		      n.date,
+		      n.today,
+		      n.product_id 
+		    FROM
+		      t_product_period_kpi_statistics n 
+		    WHERE n.KPI = '030050'
+		    and  n.product_id  in
+		    	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach> order by date ) nn 
+		    ON t.product_id = nn.product_id 
+		    AND t.date = nn.date 
+		WHERE t.product_id in
+			<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+       			#{productId}  
+   	 	 	</foreach>
+		  	<if test="request.beginDate != null and request.beginDate != ''">
+		 		AND t.date >= #{request.beginDate,jdbcType=VARCHAR} 
+		  	</if>
+		ORDER BY t.date ASC ,t.product_id
+	</select>
+	
+	<!-- 获取风险指标对比 -->
+	<select id="getRiskRatioList"  parameterType="map" resultType="com.quantdo.iwin.response.RiskCompareResponse">
+		SELECT 
+		  IFNULL(t.product_name, '') productName,
+		  IFNULL(t.id, '') productId,
+		  IFNULL(ROUND(tempVoli.value * 100, 2), '') yearVolatilityRatio,
+		  IFNULL(ROUND(tempSharp.value, 2), '') sharpRatio,
+		  IFNULL(ROUND(tempSortino.value , 2), '') sortinoRatio,
+		  IFNULL(ROUND(tempCalmar.value , 2), '') calmarRatio,
+ 		  IFNULL(ROUND(tempInfo.value , 2), '') infoRatio,
+ 		  IFNULL(ROUND(tempTreynor.value , 2), '') treyorRatio,
+		  IFNULL(ROUND(tempSkewness.value , 2),'') skewness,
+		  IFNULL(ROUND(tempKurtosis.value , 2),'') kurtosis,
+		  IFNULL(ROUND(tempUnderWater.value * 100, 2),'') underWater,
+		  IFNULL(ROUND(tempUpWater.value * 100, 2), '') upWater,
+		  IFNULL(ROUND(tempRecover.value, 2) , '') recoverDays,
+		  IFNULL(ROUND(tempFormation.value, 2) ,'') foramtionDays
+		FROM
+		  t_product t 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN
+				<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '040008' 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempVoli 
+		    ON t.id = tempVoli.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '030007'
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempSharp 
+		    ON t.id = tempSharp.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '030013'
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempSortino 
+		    ON t.id = tempSortino.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '030014'
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempCalmar
+		    ON t.id = tempCalmar.product_id
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_index_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = #{request.infoKpi,jdbcType=VARCHAR} 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC) tempInfo 
+ 		    ON t.id = tempInfo.product_id 
+ 		  LEFT JOIN 
+ 		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_index_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = #{request.treyorKpi,jdbcType=VARCHAR} 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC) tempTreynor 
+ 		    ON t.id = tempTreynor.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '040011' 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempSkewness 
+		    ON t.id = tempSkewness.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		     	 <foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '040012' 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempKurtosis 
+		    ON t.id = tempKurtosis.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		        <foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '030042' 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempUnderWater 
+		    ON t.id = tempUnderWater.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '030043' 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempUpWater 
+		    ON t.id = tempUpWater.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		       	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '040038' 
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempRecover 
+		    ON t.id = tempRecover.product_id 
+		  LEFT JOIN 
+		    (SELECT 
+		      a.product_id,
+		      a.date,
+		      a.value 
+		      FROM t_product_period_statistics a
+		      WHERE a.product_id IN 
+		      	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		        AND a.KPI = '040037'
+		        AND a.period_type = #{request.periodType,jdbcType=VARCHAR}
+		      GROUP BY a.product_id, a.date DESC ) tempFormation 
+		    ON t.id = tempFormation.product_id 
+		WHERE t.id IN 
+				<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+         			#{productId}  
+    	 	 	</foreach>
+		
+	</select>
+	
+	<!-- 产品基本情况 -->
+	<select id="getProductBasicList"  parameterType="map" resultType="com.quantdo.iwin.entity.iWinProduct">
+		SELECT 
+		  p.id id,
+		  ifnull(p.product_name,'') productName,
+		  ifnull(p.fund_trustee,'') fundTrustee,
+		  ifnull(p.fund_manager,'') fundManager,
+		  ifnull(p.create_date,'') createDate,
+		  ifnull(p.initial_asset,'') initialAsset,
+		  p.strategy_list strategyList 
+		FROM
+		  t_product p 
+	  where p.id  in 
+    	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+	            #{productId}  
+	    </foreach>
+	    ORDER BY p.id
+	</select>
+	
+	<!-- 获取已选产品列表 -->
+	<select id="getCheckedProductList"  parameterType="map" resultType="com.quantdo.iwin.entity.iWinProduct">
+		SELECT 
+		  p.id id,
+		  p.product_name productName,
+		  p.organization_id organizationId
+		FROM
+		  t_product p 
+	  where p.id in 
+    	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+	            #{productId}  
+	    </foreach>
+	    ORDER BY p.id
+	</select>
+	
+	<!-- 获取可选产品列表 -->
+	<select id="getUncheckProductList"  parameterType="map" resultType="com.quantdo.iwin.entity.iWinProduct">
+		SELECT 
+		  p.id id,
+		  p.product_name productName,
+		  p.organization_id organizationId
+		FROM
+		  t_product p 
+	  where p.product_status &lt;&gt;'3' and p.id not in 
+    	<foreach item="productId" index="index" collection="request.productIdArray" open="(" separator="," close=")">  
+	            #{productId}  
+	    </foreach>
+	</select>
+	
+	<select id="getDateListForYieldRatio" parameterType="map" resultType="java.lang.String">
+		SELECT 
+		  a.date
+		FROM
+		  t_product_period_kpi_statistics a 
+		WHERE a.kpi = #{kpiCode,jdbcType=VARCHAR}
+		     and a.product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		  GROUP BY a.date 
+	</select>
+	<select id="getDateFromNetValue" parameterType="map" resultType="java.lang.String">
+		SELECT 
+		  a.date
+		FROM
+		  t_product_net_value a 
+		WHERE   a.product_id IN 
+			<foreach item="id" index="index" collection="productIds" open="(" separator="," close=")">  
+		            #{id}
+		    </foreach>
+		  GROUP BY a.date 
+	</select>
+</mapper>

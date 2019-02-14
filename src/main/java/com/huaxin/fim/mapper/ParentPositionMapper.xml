@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.quantdo.iwin.mapper.ParentPositionMapper">
+	<!-- 母子基总资产-->
+	<select id="getTotalAssetValue" parameterType="map" resultType="com.quantdo.iwin.response.ParentPositionAnalysisResponse">
+		SELECT t.product_id productId, t.date date, t.today totalAsset,p.product_name productName 
+		    FROM t_product_period_kpi_statistics t 
+			left join t_product p
+		    on t.product_id = p.id
+		WHERE t.product_id IN 
+			<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+	            #{id}
+	   		</foreach>
+			 	AND t.KPI ='020099'
+			 	AND t.date =#{request.beginDate,jdbcType=VARCHAR}
+			GROUP BY t.product_id
+	</select>
+	
+	<!--子基资产类别KPI -->
+	<select id="getAssetMarketValue" parameterType="map" resultType="com.quantdo.iwin.entity.ProductPeriodKPIStatistics">
+		SELECT t.product_id productID, p.product_name productName, t.KPI KPI,t.date date ,t.today today FROM t_product_period_kpi_statistics t
+			LEFT JOIN t_product p ON t.product_id = p.id 
+			WHERE 1=1
+			<if test="request.beginDate != null and request.beginDate != ''">
+		 	    and t.date = #{request.beginDate,jdbcType=VARCHAR}  
+		  	</if>
+			AND t.product_id IN 
+			<foreach item="id" index="index" collection="request.productIds" open="(" separator="," close=")">  
+	            #{id}
+	   		</foreach> 
+			AND t.today IS NOT NULL 
+			AND t.KPI IN ('020068','020069','020070','020071','020081','020082','020083','020084','020085','020086','020097','020098') 
+			GROUP BY t.product_id , t.KPI
+	</select>
+	
+</mapper>
