@@ -1,0 +1,15 @@
+package com.quantdo.{projectName}.mapper;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+import com.dev.framework.core.bean.FrameworkPageable;
+import {entity};
+public interface {clsname}Mapper {
+
+	public List<{clsname}> backPaging{clsname}(
+			{clsname} {flclsname},
+			FrameworkPageable frameworkPageable,
+			@Param("orderType")Integer orderType,
+			@Param("orderWay")Integer orderWay);
+}

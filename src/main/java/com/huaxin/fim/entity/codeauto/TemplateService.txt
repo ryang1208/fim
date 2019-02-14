@@ -1,0 +1,32 @@
+package {packagepath};
+
+import java.util.List;
+import com.dev.framework.core.annotation.Gateway;
+import com.dev.framework.core.exception.ServiceException;
+import com.dev.framework.core.bean.FrameworkPage;
+import com.dev.framework.core.bean.FrameworkPageable;
+import {entity};
+import java.util.Map;
+/**
+ * 
+ * @author
+ * @date
+ * @version 1.0
+ */
+@Gateway
+public interface {clsname}Service {
+	
+	public {clsname} add({clsname} {flclsname}) throws ServiceException;
+	
+	public void delete(long id) throws ServiceException;
+	
+	public {clsname} update({clsname} {flclsname}) throws ServiceException;
+	
+	public List<{clsname}> findByCondition({pcondition}) throws ServiceException;
+	
+	public List<{clsname}> findAll() throws ServiceException;
+	
+	public Map<String,Object> validate({clsname} {flclsname});
+	
+	
+}

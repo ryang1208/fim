@@ -1,0 +1,29 @@
+package {packagepath};
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import com.dev.framework.core.annotation.EntityClass;
+import {entity};
+
+/**
+ * <br>
+ * 创建日期：2015年7月28日 上午9:08:59<br>
+ * <b>Copyright 2015 上海量投网络科技有限公司 All Rights Reserved</b>
+ *
+ * @author 
+ * @since 1.0
+ * @version 1.0
+ */
+
+@Repository(value = "{flclsname}Repository")
+@EntityClass(entityClass = {clsname}.class)
+public interface {clsname}Repository extends CrudRepository<{clsname}, Long> {
+	
+	@Query(value="{sqlcondition}")
+	public List<{clsname}> findByCondition({paracondition});
+
+}

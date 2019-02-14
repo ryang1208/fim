@@ -1,0 +1,67 @@
+package {packagepath};
+
+import java.util.Iterator;
+import java.util.List;
+import javax.inject.Inject;
+import javax.inject.Named;
+import com.dev.framework.core.exception.ServiceException;
+import com.dev.framework.core.session.FrameworkSession;
+import com.mchange.v1.util.IteratorUtils;
+import {entity};
+import com.quantdo.{projectName}.repository.{clsname}Repository;
+import com.quantdo.{projectName}.service.{clsname}Service;
+import com.quantdo.{projectName}.util.PsUtil;
+import com.dev.framework.core.bean.FrameworkPage;
+import com.dev.framework.core.bean.FrameworkPageable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 
+ * @author
+ * @date
+ * @version 1.0
+ */
+@Named(value="{flclsname}Service")
+public class {clsname}ServiceImpl implements {clsname}Service {
+
+	@Inject
+	{clsname}Repository {flclsname}Repository;
+		
+	FrameworkSession session;
+	
+	@Override
+	public {clsname} add({clsname} {flclsname}) throws ServiceException {
+	    validate({flclsname});
+		return {flclsname}Repository.save({flclsname});
+	}
+
+	@Override
+	public void delete(long id) throws ServiceException {
+		{flclsname}Repository.delete(id);		
+	}
+
+	@Override
+	public {clsname} update({clsname} {flclsname}) throws ServiceException {
+		return {flclsname}Repository.save({flclsname});		
+	}
+
+	@Override
+	public List<{clsname}> findByCondition({pcondition}) throws ServiceException {		 
+		return {flclsname}Repository.findByCondition({jvcondition});
+	}
+	
+	@Override
+	public List<{clsname}> findAll() throws ServiceException {
+		Iterator<{clsname}> iter = {flclsname}Repository.findAll().iterator();
+		return IteratorUtils.toArrayList(iter, 0);
+	}
+	
+	@Override
+	public Map<String,Object> validate({clsname} {flclsname}){
+		Map<String,Object> returnMap = new HashMap<String,Object>();
+		return returnMap;
+	}
+	
+}
