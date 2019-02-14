@@ -607,7 +607,7 @@ public interface PositionSummaryRepository extends CrudRepository<PositionSummar
             ":shortOptionMarketValue,:totalExpense)", nativeQuery = true)
     public void insert(@Param("sh") int sh, @Param("bs") int bs, @Param("priceSell") BigDecimal priceSell, @Param("priceBuy") BigDecimal priceBuy,
                        @Param("investerId") String investerId, @Param("brokerId") int brokerId, @Param("date") String date, @Param("updateDate") String updateDate,
-                       @Param("contact") String contact, @Param("datasource") int datasource, @Param("floatingProfit") BigDecimal floatingProfit,
+                       @Param("contact") String contact, @Param("datainterface") int datasource, @Param("floatingProfit") BigDecimal floatingProfit,
                        @Param("margin") BigDecimal margin, @Param("positionBuy") int positionBuy, @Param("positionSell") int positionSell,
                        @Param("settlementPriceToday") BigDecimal settlementPriceToday, @Param("settlementPriceYesterday") BigDecimal settlementPriceYesterday,
                        @Param("oriMargin") BigDecimal oriMargin, @Param("marketType") String marketType, @Param("positionCost") BigDecimal positionCost,

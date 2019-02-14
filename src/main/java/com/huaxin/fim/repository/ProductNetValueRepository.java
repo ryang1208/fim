@@ -182,7 +182,7 @@ public interface ProductNetValueRepository extends CrudRepository<ProductNetValu
     @Query(value = "insert into t_product_net_value(product_id,date,update_date,data_source,net_asset_value,net_accumulative_value,asset_value,total_share)" +
             " values(:productId,:date,:updateDate,:datasource,:netAssetValue,:netAccumulativeValue,:assetValue,:totalShare)", nativeQuery = true)
     public void insert(@Param("productId") String productId, @Param("date") String date, @Param("updateDate") String updateDate,
-                       @Param("datasource") int datasource, @Param("netAssetValue") BigDecimal netAssetValue, @Param("netAccumulativeValue") BigDecimal netAccumulativeValue,
+                       @Param("datainterface") int datasource, @Param("netAssetValue") BigDecimal netAssetValue, @Param("netAccumulativeValue") BigDecimal netAccumulativeValue,
                        @Param("assetValue") BigDecimal assetValue, @Param("totalShare") BigDecimal totalShare);
 
     @Modifying
@@ -190,7 +190,7 @@ public interface ProductNetValueRepository extends CrudRepository<ProductNetValu
     @Query(value = "update t_product_net_value set update_date=:updateDate,data_source=:datasource," +
             "net_asset_value=:netAssetValue,net_accumulative_value =:netAccumulativeValue,asset_value =:assetValue,total_share=:totalShare where id = :id", nativeQuery = true)
     public void update(@Param("id") int id, @Param("updateDate") String updateDate,
-                       @Param("datasource") int datasource, @Param("netAssetValue") BigDecimal netAssetValue, @Param("netAccumulativeValue") BigDecimal netAccumulativeValue,
+                       @Param("datainterface") int datasource, @Param("netAssetValue") BigDecimal netAssetValue, @Param("netAccumulativeValue") BigDecimal netAccumulativeValue,
                        @Param("assetValue") BigDecimal assetValue, @Param("totalShare") BigDecimal totalShare);
 
 }

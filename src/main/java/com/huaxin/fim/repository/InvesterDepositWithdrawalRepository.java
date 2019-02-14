@@ -117,7 +117,7 @@ public interface InvesterDepositWithdrawalRepository extends CrudRepository<Inve
 	@Transactional
 	@Query(value = "insert into t_invester_deposit_withdrawal(invester_id,broker_id,date,update_date,data_source,deposit,note,type_deposit_withdrawal,withdrawal) values(:investerId,:brokerId,:date,:updateDate," +
 			":datasource,:deposit,:note,:typeDepositWithdrawal,:withdrawal)",nativeQuery = true)
-	public void insert(@Param("investerId") String investerId, @Param("brokerId") int brokerId, @Param("date") String date, @Param("updateDate") String updateDate, @Param("datasource") int datasource,
+	public void insert(@Param("investerId") String investerId, @Param("brokerId") int brokerId, @Param("date") String date, @Param("updateDate") String updateDate, @Param("datainterface") int datasource,
                        @Param("deposit") BigDecimal deposit, @Param("note") String note, @Param("typeDepositWithdrawal") int typeDepositWithdrawal, @Param("withdrawal") BigDecimal withdrawal);
 
 

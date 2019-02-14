@@ -88,7 +88,7 @@ public interface TransactionSummaryRepository extends CrudRepository<Transaction
 	public void insert(@Param("sh") int sh, @Param("oc") int oc, @Param("investerId") String investerId, @Param("brokerId") int brokerId,
                        @Param("date") String date, @Param("updateDate") String updateDate, @Param("contact") String contact,
                        @Param("marketType") String marketType, @Param("totalExpense") String totalExpense, @Param("bs") int bs,
-                       @Param("closeProfit") BigDecimal closeProfit, @Param("commission") BigDecimal commission, @Param("datasource") int datasource,
+                       @Param("closeProfit") BigDecimal closeProfit, @Param("commission") BigDecimal commission, @Param("datainterface") int datasource,
                        @Param("varietyId") String varietyId, @Param("industry") String industry, @Param("lots") int lots, @Param("price") BigDecimal price,
                        @Param("turnover") BigDecimal turnover, @Param("closeProfitHedge") BigDecimal closeProfitHedge);
 
@@ -101,7 +101,7 @@ public interface TransactionSummaryRepository extends CrudRepository<Transaction
 	public void update(@Param("sh") int sh, @Param("oc") int oc, @Param("investerId") String investerId, @Param("brokerId") int brokerId,
                        @Param("date") String date, @Param("updateDate") String updateDate, @Param("contact") String contact,
                        @Param("marketType") String marketType, @Param("totalExpense") String totalExpense, @Param("bs") int bs,
-                       @Param("closeProfit") BigDecimal closeProfit, @Param("commission") BigDecimal commission, @Param("datasource") int datasource,
+                       @Param("closeProfit") BigDecimal closeProfit, @Param("commission") BigDecimal commission, @Param("datainterface") int datasource,
                        @Param("varietyId") String varietyId, @Param("industry") String industry, @Param("lots") int lots, @Param("price") BigDecimal price,
                        @Param("turnover") BigDecimal turnover, @Param("closeProfitHedge") BigDecimal closeProfitHedge);
 

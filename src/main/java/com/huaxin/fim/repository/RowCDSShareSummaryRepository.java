@@ -29,7 +29,7 @@ public interface RowCDSShareSummaryRepository extends CrudRepository<RowCDSShare
             ":datasource,:clientType,:updateDate,:hodingShare,:frozenShare," +
             ":pledgeShare,:availableShare,:clientProductId,:clientProductCode)", nativeQuery = true)
     public void insert(@Param("productId") String prodcutId, @Param("date") String date, @Param("clientName") String clientName,
-                       @Param("datasource") int datasource, @Param("clientType") String clientType, @Param("updateDate") String updateDate,
+                       @Param("datainterface") int datasource, @Param("clientType") String clientType, @Param("updateDate") String updateDate,
                        @Param("hodingShare") BigDecimal hodingShare, @Param("frozenShare") BigDecimal frozenShare,
                        @Param("pledgeShare") BigDecimal pledgeShare, @Param("availableShare") BigDecimal availableShare,
                        @Param("clientProductId") String clientProductId, @Param("clientProductCode") String clientProductCode);
